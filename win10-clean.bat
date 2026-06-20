@@ -1,6 +1,6 @@
 @echo off
 :: ============================================================================
-::  win10-clean.bat   -   Version 1.0.0
+::  win10-clean.bat   -   Version 1.0.1
 ::  Windows 10 Work-Device Setup / Debloat Script
 ::  - Removes useless built-in apps and games (Xbox, Candy Crush, Bing, 3D...)
 ::  - Disables telemetry, ads, Cortana and unneeded services
@@ -11,7 +11,7 @@
 :: ============================================================================
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "WIN10CLEAN_VERSION=1.0.0"
+set "WIN10CLEAN_VERSION=1.0.1"
 title Windows 10 Work-Device Clean Setup  v%WIN10CLEAN_VERSION%
 color 0A
 
@@ -20,7 +20,14 @@ color 0A
 net session >nul 2>&1
 if %errorlevel% NEQ 0 (
     echo Requesting administrator privileges...
-    powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+    powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs" 2>nul
+    if errorlevel 1 (
+        echo.
+        echo Could not auto-elevate. Please right-click this file and choose
+        echo "Run as administrator".
+        echo.
+        pause
+    )
     exit /b
 )
 
@@ -40,31 +47,26 @@ echo.
 
 :: ------------------------------------------------------- RESTORE POINT ------
 echo [1/6] Creating System Restore Point ...
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "Enable-ComputerRestore -Drive 'C:\' -ErrorAction SilentlyContinue; ^
-   Checkpoint-Computer -Description 'Before win10-clean' -RestorePointType 'MODIFY_SETTINGS' -ErrorAction SilentlyContinue"
-echo     Done.
+:: Remove the 24h throttle so a restore point can always be created.
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" /v SystemRestorePointCreationFrequency /t REG_DWORD /d 0 /f >nul 2>&1
+:: Single-line command + try/catch so a failure NEVER stops the script.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { Enable-ComputerRestore -Drive 'C:\' -ErrorAction Stop; Checkpoint-Computer -Description 'Before win10-clean' -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop; Write-Host '    Restore point created.' } catch { Write-Host '    WARN: restore point skipped -' $_.Exception.Message }"
 echo.
 
 :: --------------------------------------------------- REMOVE BLOAT APPS ------
 echo [2/6] Removing built-in junk apps and games ...
-:: List of UWP packages to remove. Essential/work apps are intentionally NOT listed.
-set "REMOVE_APPS=Microsoft.3DBuilder Microsoft.Microsoft3DViewer Microsoft.Print3D"
-set "REMOVE_APPS=!REMOVE_APPS! Microsoft.BingNews Microsoft.BingWeather Microsoft.BingFinance Microsoft.BingSports Microsoft.BingSearch"
-set "REMOVE_APPS=!REMOVE_APPS! Microsoft.XboxApp Microsoft.XboxGameOverlay Microsoft.XboxGamingOverlay Microsoft.XboxIdentityProvider Microsoft.XboxSpeechToTextOverlay Microsoft.Xbox.TCUI Microsoft.GamingApp"
-set "REMOVE_APPS=!REMOVE_APPS! Microsoft.MicrosoftSolitaireCollection Microsoft.MicrosoftMahjong Microsoft.MinecraftUWP king.com.CandyCrushSaga king.com.CandyCrushSodaSaga king.com.BubbleWitch3Saga"
-set "REMOVE_APPS=!REMOVE_APPS! Microsoft.ZuneMusic Microsoft.ZuneVideo Microsoft.Messaging Microsoft.OneConnect Microsoft.Wallet Microsoft.Advertising.Xaml"
-set "REMOVE_APPS=!REMOVE_APPS! Microsoft.SkypeApp Microsoft.GetHelp Microsoft.Getstarted Microsoft.MixedReality.Portal Microsoft.People Microsoft.WindowsFeedbackHub Microsoft.WindowsMaps Microsoft.YourPhone"
-set "REMOVE_APPS=!REMOVE_APPS! Microsoft.549981C3F5F10 Microsoft.Microsoft3DViewer Microsoft.WindowsAlarms"
-set "REMOVE_APPS=!REMOVE_APPS! Microsoft.Todos Clipchamp.Clipchamp Microsoft.PowerAutomateDesktop Microsoft.MicrosoftOfficeHub"
-set "REMOVE_APPS=!REMOVE_APPS! *Netflix* *Spotify* *Facebook* *Twitter* *Disney* *TikTok* *Hulu* *Amazon* *Instagram* *Hidden* *Plex* *Dropbox* *Duolingo* *Wunderlist* *Asphalt* *Royal*"
+:: Build the list (essential/work apps are intentionally NOT listed).
+set "REMOVE_APPS='Microsoft.3DBuilder','Microsoft.Microsoft3DViewer','Microsoft.Print3D'"
+set "REMOVE_APPS=!REMOVE_APPS!,'Microsoft.BingNews','Microsoft.BingWeather','Microsoft.BingFinance','Microsoft.BingSports','Microsoft.BingSearch'"
+set "REMOVE_APPS=!REMOVE_APPS!,'Microsoft.XboxApp','Microsoft.XboxGameOverlay','Microsoft.XboxGamingOverlay','Microsoft.XboxIdentityProvider','Microsoft.XboxSpeechToTextOverlay','Microsoft.Xbox.TCUI','Microsoft.GamingApp'"
+set "REMOVE_APPS=!REMOVE_APPS!,'Microsoft.MicrosoftSolitaireCollection','Microsoft.MicrosoftMahjong','Microsoft.MinecraftUWP','king.com.CandyCrushSaga','king.com.CandyCrushSodaSaga','king.com.BubbleWitch3Saga'"
+set "REMOVE_APPS=!REMOVE_APPS!,'Microsoft.ZuneMusic','Microsoft.ZuneVideo','Microsoft.Messaging','Microsoft.OneConnect','Microsoft.Wallet','Microsoft.Advertising.Xaml'"
+set "REMOVE_APPS=!REMOVE_APPS!,'Microsoft.SkypeApp','Microsoft.GetHelp','Microsoft.Getstarted','Microsoft.MixedReality.Portal','Microsoft.People','Microsoft.WindowsFeedbackHub','Microsoft.WindowsMaps','Microsoft.YourPhone'"
+set "REMOVE_APPS=!REMOVE_APPS!,'Microsoft.549981C3F5F10','Microsoft.WindowsAlarms','Microsoft.Todos','Clipchamp.Clipchamp','Microsoft.PowerAutomateDesktop','Microsoft.MicrosoftOfficeHub'"
+set "REMOVE_APPS=!REMOVE_APPS!,'*Netflix*','*Spotify*','*Facebook*','*Twitter*','*Disney*','*TikTok*','*Hulu*','*Amazon*','*Instagram*','*Plex*','*Dropbox*','*Duolingo*','*Wunderlist*','*Asphalt*','*Royal*'"
 
-for %%A in (!REMOVE_APPS!) do (
-    echo     - Removing %%A
-    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-      "Get-AppxPackage -AllUsers '%%A' | Remove-AppxPackage -ErrorAction SilentlyContinue; ^
-       Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like '%%A' } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue" >nul 2>&1
-)
+:: One single PowerShell call handles the whole list (reliable, no caret/loop issues).
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$apps=@(!REMOVE_APPS!); foreach($a in $apps){ Write-Host ('    - '+$a); Get-AppxPackage -AllUsers $a | Remove-AppxPackage -ErrorAction SilentlyContinue; Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like $a } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue }"
 echo     Done.
 echo.
 
