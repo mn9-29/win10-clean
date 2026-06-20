@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>Win10Clean</RootNamespace>
+    <AssemblyName>win10-clean-gui</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <Product>win10-clean</Product>
+    <AssemblyTitle>win10-clean GUI</AssemblyTitle>
+  </PropertyGroup>
+
+</Project>

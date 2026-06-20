@@ -1,7 +1,8 @@
 @echo off
 :: ============================================================================
-::  win10-clean.bat   -   Version 1.3.0
+::  win10-clean.bat   -   Version 2.0.0
 ::  Windows 10 / 11 Device Setup & Debloat - interactive edition
+::  (Prefer the GUI app 'win10-clean-gui.exe' for point-and-click control.)
 ::
 ::  Three modes:
 ::    WORK    - office device: removes Xbox/games, disables Game DVR, etc.
@@ -16,7 +17,7 @@
 :: ============================================================================
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "WIN10CLEAN_VERSION=1.3.0"
+set "WIN10CLEAN_VERSION=2.0.0"
 title Windows Device Clean Setup  v%WIN10CLEAN_VERSION%
 color 0A
 

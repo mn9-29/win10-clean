@@ -1,16 +1,17 @@
 name: Release
 
-# ينشئ Release تلقائياً اعتماداً على رقم الإصدار المكتوب داخل win10-clean.bat
-# (المتغير WIN10CLEAN_VERSION). لإصدار نسخة جديدة:
-#   1) غيّر رقم WIN10CLEAN_VERSION في win10-clean.bat
-#   2) حدّث CHANGELOG.md
-#   3) ادفع إلى master  ->  يُنشأ Release جديد تلقائياً
+# Builds the WPF GUI (.exe) and publishes a GitHub Release whenever the
+# version inside win10-clean.bat changes (on push to master) or on manual run.
+# To cut a new version: bump WIN10CLEAN_VERSION in win10-clean.bat, update
+# CHANGELOG.md, push to master -> the Release is created automatically.
 on:
   push:
     branches: [ master ]
     paths:
       - 'win10-clean.bat'
+      - 'win10-clean-undo.bat'
       - 'CHANGELOG.md'
+      - 'win10-clean-gui/**'
   workflow_dispatch:
 
 permissions:
@@ -18,7 +19,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,6 +28,7 @@ jobs:
 
       - name: Read version from script
         id: ver
+        shell: bash
         run: |
           v=$(grep -oP 'WIN10CLEAN_VERSION=\K[0-9]+\.[0-9]+\.[0-9]+' win10-clean.bat | head -n1)
           if [ -z "$v" ]; then echo "Version not found in win10-clean.bat"; exit 1; fi
@@ -35,6 +37,7 @@ jobs:
 
       - name: Check if release already exists
         id: check
+        shell: bash
         run: |
           if git ls-remote --tags origin "refs/tags/v${{ steps.ver.outputs.version }}" | grep -q .; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
@@ -42,6 +45,16 @@ jobs:
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Setup .NET
+        if: steps.check.outputs.exists == 'false'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build GUI (.exe)
+        if: steps.check.outputs.exists == 'false'
+        run: dotnet build win10-clean-gui/win10-clean-gui.csproj -c Release
 
       - name: Create GitHub Release
         if: steps.check.outputs.exists == 'false'
@@ -52,4 +65,5 @@ jobs:
           files: |
             win10-clean.bat
             win10-clean-undo.bat
+            win10-clean-gui/bin/Release/net48/win10-clean-gui.exe
           generate_release_notes: true

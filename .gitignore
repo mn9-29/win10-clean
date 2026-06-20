@@ -1,0 +1,7 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+*.user
+
+# Logs produced by the tool
+win10-clean_*.log
