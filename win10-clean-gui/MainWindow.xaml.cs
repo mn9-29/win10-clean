@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
@@ -15,7 +17,10 @@ namespace Win10Clean
 {
     public partial class MainWindow : Window
     {
-        const string Version = "2.3.0";
+        const string Version = "2.4.0";
+        string _filter = "";
+        bool _dark = true;
+        readonly List<ICollectionView> _views = new List<ICollectionView>();
 
         // ---- live RAM meter (GlobalMemoryStatusEx) ----
         [StructLayout(LayoutKind.Sequential)]
@@ -61,12 +66,107 @@ namespace Win10Clean
             icCleanup.ItemsSource = _cleanup;
             icSystem.ItemsSource = _system;
             icInstall.ItemsSource = _install;
+            SetupFilters();
             ApplyPreset("WORK");
 
             _ramTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
             _ramTimer.Tick += (s, e) => UpdateRam();
             _ramTimer.Start();
             UpdateRam();
+        }
+
+        // ----------------------------------------------------------- search filter
+        void SetupFilters()
+        {
+            foreach (var c in new[] { _apps, _privacy, _services, _gaming, _perf, _cleanup, _system, _install })
+            {
+                var v = CollectionViewSource.GetDefaultView(c);
+                v.Filter = o =>
+                {
+                    if (string.IsNullOrEmpty(_filter)) return true;
+                    var it = (TweakItem)o;
+                    return (it.Title != null && it.Title.IndexOf(_filter, StringComparison.OrdinalIgnoreCase) >= 0)
+                        || (it.Description != null && it.Description.IndexOf(_filter, StringComparison.OrdinalIgnoreCase) >= 0);
+                };
+                _views.Add(v);
+            }
+        }
+
+        void txtSearch_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        {
+            _filter = txtSearch.Text.Trim();
+            foreach (var v in _views) v.Refresh();
+        }
+
+        // ------------------------------------------------- select all / none (tab)
+        ObservableCollection<TweakItem> ActiveCollection()
+        {
+            switch (tabs.SelectedIndex)
+            {
+                case 0: return _apps;
+                case 1: return _privacy;
+                case 2: return _services;
+                case 3: return _gaming;
+                case 4: return _perf;
+                case 5: return _cleanup;
+                case 6: return _system;
+                case 7: return _install;
+                default: return _apps;
+            }
+        }
+
+        void SetVisibleSelection(bool sel)
+        {
+            var view = CollectionViewSource.GetDefaultView(ActiveCollection());
+            foreach (var o in view) ((TweakItem)o).IsSelected = sel; // iterates filtered items only
+        }
+
+        void btnSelAll_Click(object sender, RoutedEventArgs e) => SetVisibleSelection(true);
+        void btnSelNone_Click(object sender, RoutedEventArgs e) => SetVisibleSelection(false);
+
+        // ------------------------------------------------------------- theme toggle
+        void btnTheme_Click(object sender, RoutedEventArgs e)
+        {
+            _dark = !_dark;
+            ApplyTheme();
+        }
+
+        void ApplyTheme()
+        {
+            if (_dark)
+            {
+                SetBrush("BgBrush", "#1E1E1E"); SetBrush("PanelBrush", "#252526");
+                SetBrush("FgBrush", "#EEEEEE"); SetBrush("FgDimBrush", "#999999");
+                SetBrush("SepBrush", "#33FFFFFF");
+                btnTheme.Content = "Light theme";
+            }
+            else
+            {
+                SetBrush("BgBrush", "#F3F3F3"); SetBrush("PanelBrush", "#FFFFFF");
+                SetBrush("FgBrush", "#1A1A1A"); SetBrush("FgDimBrush", "#666666");
+                SetBrush("SepBrush", "#22000000");
+                btnTheme.Content = "Dark theme";
+            }
+        }
+
+        void SetBrush(string key, string hex)
+        {
+            Resources[key] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+        }
+
+        // ---------------------------------------------------------- app sizes (log)
+        async void btnSizes_Click(object sender, RoutedEventArgs e)
+        {
+            SetBusy(true);
+            txtLog.Clear();
+            Log("» Calculating installed app sizes (this can take a minute)...");
+            await Task.Run(() => RunCmd(
+                "powershell -NoProfile -Command \"Get-AppxPackage | Select-Object Name, " +
+                "@{N='SizeMB';E={[math]::Round((Get-ChildItem $_.InstallLocation -Recurse -ErrorAction SilentlyContinue | " +
+                "Measure-Object Length -Sum).Sum/1MB,1)}} | Sort-Object SizeMB -Descending | " +
+                "Format-Table -AutoSize | Out-String -Width 200\""));
+            Log("=== Done. Bigger apps are listed first. ===");
+            SetBusy(false);
         }
 
         void UpdateRam()
@@ -459,6 +559,7 @@ namespace Win10Clean
             btnRevert.IsEnabled = !busy;
             btnExplorer.IsEnabled = !busy;
             btnDocker.IsEnabled = !busy;
+            btnSizes.IsEnabled = !busy;
             btnWork.IsEnabled = !busy;
             btnGaming.IsEnabled = !busy;
             btnBasic.IsEnabled = !busy;
