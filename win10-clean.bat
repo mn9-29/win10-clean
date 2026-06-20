@@ -1,6 +1,6 @@
 @echo off
 :: ============================================================================
-::  win10-clean.bat
+::  win10-clean.bat   -   Version 1.0.0
 ::  Windows 10 Work-Device Setup / Debloat Script
 ::  - Removes useless built-in apps and games (Xbox, Candy Crush, Bing, 3D...)
 ::  - Disables telemetry, ads, Cortana and unneeded services
@@ -11,7 +11,8 @@
 :: ============================================================================
 
 setlocal EnableExtensions EnableDelayedExpansion
-title Windows 10 Work-Device Clean Setup
+set "WIN10CLEAN_VERSION=1.0.0"
+title Windows 10 Work-Device Clean Setup  v%WIN10CLEAN_VERSION%
 color 0A
 
 :: ------------------------------------------------------------------ ADMIN ---
@@ -25,7 +26,7 @@ if %errorlevel% NEQ 0 (
 
 cls
 echo ============================================================
-echo            WINDOWS 10 - WORK DEVICE CLEAN SETUP
+echo        WINDOWS 10 - WORK DEVICE CLEAN SETUP  v%WIN10CLEAN_VERSION%
 echo ============================================================
 echo  This will:
 echo    [+] Create a System Restore Point (safety backup)

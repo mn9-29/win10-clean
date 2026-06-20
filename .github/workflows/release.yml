@@ -1,0 +1,27 @@
+name: Release
+
+# ينشئ Release تلقائياً في GitHub كلما تم رفع وسم (tag) يبدأ بحرف v
+# مثال:  git tag v1.0.1  &&  git push origin v1.0.1
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: win10-clean ${{ github.ref_name }}
+          files: |
+            win10-clean.bat
+          generate_release_notes: true
+          body_path: CHANGELOG.md
