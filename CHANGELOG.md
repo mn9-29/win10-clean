@@ -4,6 +4,14 @@
 يتبع المشروع [Semantic Versioning](https://semver.org/lang/ar/):
 **MAJOR.MINOR.PATCH** — إصلاح = PATCH، ميزة جديدة = MINOR، تغيير كبير = MAJOR.
 
+## [2.1.0] - 2026-06-20
+### مميزات جديدة (WSL / Startup)
+- **تبويب جديد "WSL / Startup"** في التطبيق الرسومي (وخيار `[7]` في السكربت):
+  - **Optimize WSL2 memory**: ينشئ ملف `.wslconfig` يحدّد ذاكرة WSL/Docker بـ 8GB ويفعّل `autoMemoryReclaim` (يرجّع الذاكرة المحرّرة لويندوز تلقائياً)، ثم يطفي WSL.
+  - **Shut down WSL now**: يوقف WSL2 فوراً لتحرير الرام.
+  - **تعطيل البرامج الثقيلة من بدء التشغيل**: Docker، Discord، Steam، SteelSeries، GitHub Desktop، Epic، Spotify (قابل للتراجع من Task Manager).
+- تعالج استهلاك `VmmemWSL` العالي وتكدّس برامج بدء التشغيل في الذاكرة.
+
 ## [2.0.0] - 2026-06-20
 ### تطبيق رسومي جديد (GUI) 🎉
 - **برنامج `win10-clean-gui.exe` بواجهة رسومية** (C#/.NET WPF) — للتحكّم بالضغط بدل الأوامر:

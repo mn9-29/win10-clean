@@ -41,7 +41,7 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
             <TextBlock Text="win10-clean" Foreground="#4EC9B0" FontSize="24" FontWeight="Bold"/>
-            <TextBlock x:Name="lblVersion" Text="v2.0.0" Foreground="#888" FontSize="14"
+            <TextBlock x:Name="lblVersion" Text="v2.1.0" Foreground="#888" FontSize="14"
                        VerticalAlignment="Bottom" Margin="8,0,0,4"/>
             <TextBlock Text="  -  tick what you want, then Apply" Foreground="#888"
                        FontSize="13" VerticalAlignment="Bottom" Margin="6,0,0,4"/>
@@ -89,6 +89,11 @@
             <TabItem Header="Cleanup">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <ItemsControl x:Name="icCleanup" ItemTemplate="{StaticResource TweakTemplate}"/>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="WSL / Startup">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="icSystem" ItemTemplate="{StaticResource TweakTemplate}"/>
                 </ScrollViewer>
             </TabItem>
             <TabItem Header="Install (winget)">

@@ -1,6 +1,6 @@
 @echo off
 :: ============================================================================
-::  win10-clean.bat   -   Version 2.0.0
+::  win10-clean.bat   -   Version 2.1.0
 ::  Windows 10 / 11 Device Setup & Debloat - interactive edition
 ::  (Prefer the GUI app 'win10-clean-gui.exe' for point-and-click control.)
 ::
@@ -17,7 +17,7 @@
 :: ============================================================================
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "WIN10CLEAN_VERSION=2.0.0"
+set "WIN10CLEAN_VERSION=2.1.0"
 title Windows Device Clean Setup  v%WIN10CLEAN_VERSION%
 color 0A
 
@@ -73,12 +73,13 @@ echo   [3] Install apps       (winget)
 echo   [4] Extra cleanup ^& performance
 echo   [5] FULL setup         (clean + apps + extra)
 echo   [6] How to undo / restore
+echo   [7] WSL ^& startup optimization
 echo   [9] Back to mode select
 echo   [0] Exit
 echo ------------------------------------------------------------
 echo   Log file: %LOG%
 echo ============================================================
-choice /C 12345690 /N /M "Choose an option: "
+choice /C 123456790 /N /M "Choose an option: "
 set "OPT=%errorlevel%"
 if "%OPT%"=="1" ( set "PROFILE=MEDIUM" & goto :do_clean )
 if "%OPT%"=="2" ( goto :pick_profile )
@@ -86,8 +87,9 @@ if "%OPT%"=="3" ( call :restore_point & call :install_apps & goto :after )
 if "%OPT%"=="4" ( call :restore_point & call :extra_cleanup & goto :after )
 if "%OPT%"=="5" ( set "PROFILE=MEDIUM" & set "DO_FULL=1" & goto :do_clean )
 if "%OPT%"=="6" ( goto :undo_info )
-if "%OPT%"=="7" ( goto :mode_select )
-if "%OPT%"=="8" ( goto :end )
+if "%OPT%"=="7" ( call :wsl_startup & goto :after )
+if "%OPT%"=="8" ( goto :mode_select )
+if "%OPT%"=="9" ( goto :end )
 goto :menu
 
 :pick_profile
@@ -339,6 +341,34 @@ echo ------------------------------------------------------------
 echo.
 pause
 goto :menu
+
+:: ----------------------------------------------------- WSL & STARTUP --------
+:wsl_startup
+echo.
+call :log "[WSL] Writing .wslconfig (8GB cap + auto memory reclaim)..."
+(echo [wsl2]& echo memory=8GB& echo processors=4& echo swap=2GB& echo.& echo [experimental]& echo autoMemoryReclaim=gradual& echo sparseVhd=true) > "%USERPROFILE%\.wslconfig"
+call :log "[WSL] .wslconfig saved to %USERPROFILE%"
+echo.
+choice /C YN /N /M "Disable heavy apps from startup (Docker, Discord, Steam, SteelSeries, GitHub)? [Y/N]: "
+if errorlevel 2 goto :wsl_ask_shutdown
+for %%A in (Docker Discord Steam SteelSeries GitHub) do (
+    echo     - Disabling %%A from startup
+    call :disablestartup "*%%A*"
+)
+:wsl_ask_shutdown
+echo.
+choice /C YN /N /M "Shut down WSL now to free its RAM (closes Docker)? [Y/N]: "
+if errorlevel 2 goto :wsl_done
+call :log "[WSL] Shutting down WSL..."
+wsl --shutdown
+:wsl_done
+call :log "[WSL] Done. (Restart Docker manually if you stopped WSL.)"
+exit /b
+
+:: Disable a startup entry by name pattern. %~1 = pattern like *Discord*
+:disablestartup
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$pat='%~1'; $run='HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run'; $appr='HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; if(!(Test-Path $appr)){New-Item $appr -Force | Out-Null}; if(Test-Path $run){ (Get-Item $run).Property | Where-Object { $_ -like $pat } | ForEach-Object { New-ItemProperty -Path $appr -Name $_ -Value ([byte[]](3,0,0,0,0,0,0,0,0,0,0,0)) -PropertyType Binary -Force | Out-Null } }"
+exit /b
 
 :: --------------------------------------------------------------- LOGGER -----
 :log

@@ -10,7 +10,7 @@ namespace Win10Clean
 {
     public partial class MainWindow : Window
     {
-        const string Version = "2.0.0";
+        const string Version = "2.1.0";
 
         readonly List<TweakItem> _all = new List<TweakItem>();
         readonly ObservableCollection<TweakItem> _apps = new ObservableCollection<TweakItem>();
@@ -19,6 +19,7 @@ namespace Win10Clean
         readonly ObservableCollection<TweakItem> _gaming = new ObservableCollection<TweakItem>();
         readonly ObservableCollection<TweakItem> _perf = new ObservableCollection<TweakItem>();
         readonly ObservableCollection<TweakItem> _cleanup = new ObservableCollection<TweakItem>();
+        readonly ObservableCollection<TweakItem> _system = new ObservableCollection<TweakItem>();
         readonly ObservableCollection<TweakItem> _install = new ObservableCollection<TweakItem>();
 
         public MainWindow()
@@ -32,6 +33,7 @@ namespace Win10Clean
             icGaming.ItemsSource = _gaming;
             icPerf.ItemsSource = _perf;
             icCleanup.ItemsSource = _cleanup;
+            icSystem.ItemsSource = _system;
             icInstall.ItemsSource = _install;
             ApplyPreset("WORK");
         }
@@ -53,6 +55,21 @@ namespace Win10Clean
 
         static string Winget(string id) =>
             "winget install -e --id " + id + " --silent --accept-package-agreements --accept-source-agreements";
+
+        // Disable a startup entry by matching name pattern (uses the same
+        // StartupApproved flag Task Manager uses, so it is reversible there).
+        static string DisableStartup(string pattern) =>
+            "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$pat='" + pattern + "'; " +
+            "$run='HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run'; " +
+            "$appr='HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run'; " +
+            "if(!(Test-Path $appr)){New-Item $appr -Force | Out-Null}; " +
+            "if(Test-Path $run){ (Get-Item $run).Property | Where-Object { $_ -like $pat } | ForEach-Object { " +
+            "New-ItemProperty -Path $appr -Name $_ -Value ([byte[]](3,0,0,0,0,0,0,0,0,0,0,0)) -PropertyType Binary -Force | Out-Null } }\"";
+
+        // Writes %USERPROFILE%\.wslconfig (memory cap + auto memory reclaim).
+        const string WslConfigCmd =
+            "(echo [wsl2]& echo memory=8GB& echo processors=4& echo swap=2GB& echo.& " +
+            "echo [experimental]& echo autoMemoryReclaim=gradual& echo sparseVhd=true) > \"%USERPROFILE%\\.wslconfig\"";
 
         const string RestoreCmd =
             "powershell -NoProfile -ExecutionPolicy Bypass -Command \"try { Enable-ComputerRestore -Drive 'C:\\' -ErrorAction Stop; " +
@@ -201,6 +218,21 @@ namespace Win10Clean
                 "taskkill /f /im OneDrive.exe",
                 "\"%SystemRoot%\\System32\\OneDriveSetup.exe\" /uninstall",
                 "\"%SystemRoot%\\SysWOW64\\OneDriveSetup.exe\" /uninstall");
+
+            // ---- WSL / Startup (situational, all off by default) ----
+            Add(_system, "Optimize WSL2 memory (.wslconfig)",
+                "Caps WSL/Docker RAM at 8GB and auto-returns freed memory to Windows, then shuts WSL down.",
+                false, false, false, WslConfigCmd, "wsl --shutdown");
+            Add(_system, "Shut down WSL now", "Stops the WSL2 VM to release its RAM immediately (closes Docker).",
+                false, false, false, "wsl --shutdown");
+            Add(_system, "Disable Docker Desktop autostart", "Stops Docker launching at boot (start it manually when needed).",
+                false, false, false, DisableStartup("*Docker*"));
+            Add(_system, "Disable Discord autostart", "Stops Discord launching at boot.", false, false, false, DisableStartup("*Discord*"));
+            Add(_system, "Disable Steam autostart", "Stops Steam launching at boot.", false, false, false, DisableStartup("*Steam*"));
+            Add(_system, "Disable SteelSeries autostart", "Stops SteelSeries GG / Sonar launching at boot.", false, false, false, DisableStartup("*SteelSeries*"));
+            Add(_system, "Disable GitHub Desktop autostart", "Stops GitHub Desktop launching at boot.", false, false, false, DisableStartup("*GitHub*"));
+            Add(_system, "Disable Epic Games autostart", "Stops Epic Games Launcher at boot.", false, false, false, DisableStartup("*Epic*"));
+            Add(_system, "Disable Spotify autostart", "Stops Spotify launching at boot.", false, false, false, DisableStartup("*Spotify*"));
 
             // ---- Install (winget) - all off by default, user opts in ----
             Add(_install, "Google Chrome", "Web browser.", false, false, false, Winget("Google.Chrome"));
