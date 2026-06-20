@@ -1,9 +1,10 @@
 @echo off
 :: ============================================================================
-::  win10-clean-undo.bat   -   Version 1.1.0
+::  win10-clean-undo.bat   -   Version 1.2.0
 ::  Reverses the settings/services changed by win10-clean.bat:
 ::    * Re-enables the disabled services
 ::    * Removes the telemetry/ads/Cortana/GameDVR policy registry values
+::    * Reverts gaming tweaks (mouse / visual effects / network latency)
 ::    * Restores the Balanced power plan
 ::    * Re-enables the telemetry scheduled tasks
 ::
@@ -64,12 +65,24 @@ reg add "HKCU\System\GameConfigStore" /v GameDVR_Enabled /t REG_DWORD /d 1 /f >n
 echo     Done.
 echo.
 
-echo [3/4] Restoring Balanced power plan ...
+echo [3/5] Reverting gaming tweaks (mouse / visuals / network) ...
+:: Restore default mouse acceleration
+reg add "HKCU\Control Panel\Mouse" /v MouseSpeed /t REG_SZ /d 1 /f >nul 2>&1
+reg add "HKCU\Control Panel\Mouse" /v MouseThreshold1 /t REG_SZ /d 6 /f >nul 2>&1
+reg add "HKCU\Control Panel\Mouse" /v MouseThreshold2 /t REG_SZ /d 10 /f >nul 2>&1
+:: Let Windows manage visual effects again
+reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 0 /f >nul 2>&1
+:: Remove Nagle (low-latency) tweaks from all network interfaces
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces' | ForEach-Object { Remove-ItemProperty -Path $_.PSPath -Name TcpAckFrequency -ErrorAction SilentlyContinue; Remove-ItemProperty -Path $_.PSPath -Name TCPNoDelay -ErrorAction SilentlyContinue }"
+echo     Done.
+echo.
+
+echo [4/5] Restoring Balanced power plan ...
 powercfg -setactive 381b4222-f694-41f0-9685-ff5bb260df2e >nul 2>&1
 echo     Done.
 echo.
 
-echo [4/4] Re-enabling scheduled tasks ...
+echo [5/5] Re-enabling scheduled tasks ...
 for %%T in (
     "\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser"
     "\Microsoft\Windows\Application Experience\ProgramDataUpdater"

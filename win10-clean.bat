@@ -1,27 +1,22 @@
 @echo off
 :: ============================================================================
-::  win10-clean.bat   -   Version 1.1.0
-::  Windows 10 / 11 Work-Device Setup & Debloat - interactive edition
+::  win10-clean.bat   -   Version 1.2.0
+::  Windows 10 / 11 Device Setup & Debloat - interactive edition
 ::
-::  Features:
-::   * Interactive menu + profiles (Light / Medium / Strong)
-::   * Removes built-in junk apps and games (Xbox, Candy Crush, Bing, 3D...)
-::   * Installs work apps via winget (Chrome, 7-Zip, PDF reader, VLC...)
-::   * Disables telemetry, ads, Cortana, Game DVR and useless services
-::   * Extra cleanup: temp files, High Performance power plan,
-::     telemetry scheduled tasks, optional OneDrive removal
-::   * Writes a full .log file of everything it does
-::   * Creates a System Restore Point before changing anything
+::  Two modes:
+::    WORK    - office device: removes Xbox/games, disables Game DVR, etc.
+::    GAMING  - keeps Xbox & Game Bar, enables Game Mode + gaming tweaks.
+::  Both modes share: junk-app removal, telemetry/ads off, cleanup, logging.
 ::
-::  KEEPS: Microsoft Edge, Microsoft Store, Office, Calculator, Photos,
-::         Notepad, Paint, Snipping Tool, Sticky Notes.
+::  KEEPS (work): Edge, Store, Office, Calculator, Photos, Notepad, Paint,
+::               Snipping Tool, Sticky Notes.
 ::  Undo:  run win10-clean-undo.bat  (or use the restore point).
 ::  Run as: Right click -> "Run as administrator"
 :: ============================================================================
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "WIN10CLEAN_VERSION=1.1.0"
-title Windows Work-Device Clean Setup  v%WIN10CLEAN_VERSION%
+set "WIN10CLEAN_VERSION=1.2.0"
+title Windows Device Clean Setup  v%WIN10CLEAN_VERSION%
 color 0A
 
 :: ------------------------------------------------------------------ ADMIN ---
@@ -44,23 +39,42 @@ for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss
 set "LOG=%~dp0win10-clean_%TS%.log"
 call :log "=== win10-clean v%WIN10CLEAN_VERSION% started ==="
 
+:: ----------------------------------------------------------- MODE SELECT ----
+:mode_select
+cls
+echo ============================================================
+echo        WINDOWS DEVICE CLEAN SETUP   v%WIN10CLEAN_VERSION%
+echo ============================================================
+echo   What is this device mainly used for?
+echo ------------------------------------------------------------
+echo   [1] Office / Work   (removes Xbox ^& games, max focus)
+echo   [2] Gaming          (keeps Xbox/Game Bar, gaming tweaks)
+echo   [0] Exit
+echo ============================================================
+choice /C 120 /N /M "Choose: "
+set "MS=%errorlevel%"
+if "%MS%"=="1" ( set "MODE=WORK"   & goto :menu )
+if "%MS%"=="2" ( set "MODE=GAMING" & goto :menu )
+goto :end
+
 :: ------------------------------------------------------------------- MENU ---
 :menu
 cls
 echo ============================================================
-echo        WINDOWS WORK-DEVICE CLEAN SETUP   v%WIN10CLEAN_VERSION%
+echo    %MODE% MODE  -  win10-clean v%WIN10CLEAN_VERSION%
 echo ============================================================
 echo   [1] Quick clean        (recommended - Medium profile)
 echo   [2] Clean with profile (choose Light / Medium / Strong)
-echo   [3] Install work apps  (winget: Chrome, 7-Zip, PDF, VLC...)
+echo   [3] Install apps       (winget)
 echo   [4] Extra cleanup ^& performance
-echo   [5] FULL setup         (clean + apps + extra cleanup)
+echo   [5] FULL setup         (clean + apps + extra)
 echo   [6] How to undo / restore
+echo   [9] Back to mode select
 echo   [0] Exit
 echo ------------------------------------------------------------
 echo   Log file: %LOG%
 echo ============================================================
-choice /C 1234560 /N /M "Choose an option: "
+choice /C 12345690 /N /M "Choose an option: "
 set "OPT=%errorlevel%"
 if "%OPT%"=="1" ( set "PROFILE=MEDIUM" & goto :do_clean )
 if "%OPT%"=="2" ( goto :pick_profile )
@@ -68,13 +82,14 @@ if "%OPT%"=="3" ( call :restore_point & call :install_apps & goto :after )
 if "%OPT%"=="4" ( call :restore_point & call :extra_cleanup & goto :after )
 if "%OPT%"=="5" ( set "PROFILE=MEDIUM" & set "DO_FULL=1" & goto :do_clean )
 if "%OPT%"=="6" ( goto :undo_info )
-if "%OPT%"=="7" ( goto :end )
+if "%OPT%"=="7" ( goto :mode_select )
+if "%OPT%"=="8" ( goto :end )
 goto :menu
 
 :pick_profile
 cls
 echo ------------------------------------------------------------
-echo   Choose how aggressive the app removal should be:
+echo   Choose how aggressive the junk-app removal should be:
 echo ------------------------------------------------------------
 echo   [1] Light   - games + 3rd-party junk only (safest)
 echo   [2] Medium  - light + most Microsoft bloat (recommended)
@@ -90,13 +105,13 @@ goto :menu
 
 :: -------------------------------------------------------- MAIN CLEAN FLOW ---
 :do_clean
-call :log "Profile selected: %PROFILE%"
+call :log "Mode: %MODE% | Profile: %PROFILE%"
 call :restore_point
 call :remove_apps
 call :disable_services
 call :disable_telemetry
-call :disable_cortana_gamedvr
-call :perf_tweaks
+call :disable_cortana
+if /I "%MODE%"=="GAMING" ( call :gaming_tweaks ) else ( call :disable_gamedvr & call :perf_tweaks )
 if "%DO_FULL%"=="1" (
     call :install_apps
     call :extra_cleanup
@@ -131,12 +146,13 @@ exit /b
 :: --------------------------------------------------- REMOVE BLOAT APPS ------
 :remove_apps
 echo.
-call :log "[Apps] Removing built-in junk apps (profile: %PROFILE%)..."
-:: LIGHT: games + 3rd-party stubs only
-set "APPS='Microsoft.XboxApp','Microsoft.XboxGameOverlay','Microsoft.XboxGamingOverlay','Microsoft.XboxSpeechToTextOverlay','Microsoft.Xbox.TCUI','Microsoft.GamingApp'"
-set "APPS=!APPS!,'Microsoft.MicrosoftSolitaireCollection','Microsoft.MicrosoftMahjong','Microsoft.MinecraftUWP','king.com.CandyCrushSaga','king.com.CandyCrushSodaSaga','king.com.BubbleWitch3Saga'"
+call :log "[Apps] Removing junk apps (mode: %MODE%, profile: %PROFILE%)..."
+:: --- Games & 3rd-party junk (removed in BOTH modes) ---
+set "APPS='Microsoft.MicrosoftSolitaireCollection','Microsoft.MicrosoftMahjong','king.com.CandyCrushSaga','king.com.CandyCrushSodaSaga','king.com.BubbleWitch3Saga'"
 set "APPS=!APPS!,'Microsoft.BingNews','Microsoft.BingWeather','Microsoft.BingFinance','Microsoft.BingSports'"
 set "APPS=!APPS!,'*Netflix*','*Spotify*','*Facebook*','*Twitter*','*Disney*','*TikTok*','*Hulu*','*Amazon*','*Instagram*','*Plex*','*Dropbox*','*Duolingo*','*Wunderlist*','*Asphalt*','*Royal*'"
+:: --- Xbox / gaming apps: removed in WORK mode ONLY (kept for GAMING) ---
+if /I not "%MODE%"=="GAMING" set "APPS=!APPS!,'Microsoft.XboxApp','Microsoft.XboxGameOverlay','Microsoft.XboxGamingOverlay','Microsoft.XboxSpeechToTextOverlay','Microsoft.Xbox.TCUI','Microsoft.GamingApp'"
 if /I "%PROFILE%"=="LIGHT" goto :run_remove
 :: MEDIUM: + Microsoft bloat
 set "APPS=!APPS!,'Microsoft.3DBuilder','Microsoft.Microsoft3DViewer','Microsoft.Print3D','Microsoft.MixedReality.Portal'"
@@ -154,10 +170,19 @@ exit /b
 :disable_services
 echo.
 call :log "[Services] Disabling useless background services..."
-for %%S in (XblAuthManager XblGameSave XboxNetApiSvc XboxGipSvc DiagTrack dmwappushservice MapsBroker RetailDemo WMPNetworkSvc Fax RemoteRegistry WpcMonSvc lfsvc) do (
+:: Common to both modes (Xbox services handled separately below).
+for %%S in (DiagTrack dmwappushservice MapsBroker RetailDemo WMPNetworkSvc Fax RemoteRegistry WpcMonSvc lfsvc) do (
     echo     - %%S
     sc stop "%%S" >nul 2>&1
     sc config "%%S" start= disabled >nul 2>&1
+)
+:: Xbox services: disabled in WORK mode only (kept for GAMING).
+if /I not "%MODE%"=="GAMING" (
+    for %%S in (XblAuthManager XblGameSave XboxNetApiSvc XboxGipSvc) do (
+        echo     - %%S
+        sc stop "%%S" >nul 2>&1
+        sc config "%%S" start= disabled >nul 2>&1
+    )
 )
 call :log "[Services] Done."
 exit /b
@@ -183,18 +208,25 @@ reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v PublishUserActiviti
 call :log "[Telemetry] Done."
 exit /b
 
-:: ----------------------------------------------- DISABLE CORTANA/GAMES ------
-:disable_cortana_gamedvr
+:: --------------------------------------------------------- DISABLE CORTANA --
+:disable_cortana
 echo.
-call :log "[Cortana/GameDVR] Disabling Cortana and Game DVR..."
+call :log "[Cortana] Disabling Cortana..."
 reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCortana /t REG_DWORD /d 0 /f >nul 2>&1
+call :log "[Cortana] Done."
+exit /b
+
+:: ------------------------------------------------- DISABLE GAME DVR (WORK) --
+:disable_gamedvr
+echo.
+call :log "[GameDVR] Disabling Game DVR / Game Bar (work mode)..."
 reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR" /v AppCaptureEnabled /t REG_DWORD /d 0 /f >nul 2>&1
 reg add "HKCU\System\GameConfigStore" /v GameDVR_Enabled /t REG_DWORD /d 0 /f >nul 2>&1
 reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\GameDVR" /v AllowGameDVR /t REG_DWORD /d 0 /f >nul 2>&1
-call :log "[Cortana/GameDVR] Done."
+call :log "[GameDVR] Done."
 exit /b
 
-:: -------------------------------------------------- PERFORMANCE TWEAKS ------
+:: -------------------------------------------------- PERFORMANCE (WORK) ------
 :perf_tweaks
 echo.
 call :log "[Perf] Applying light performance tweaks..."
@@ -202,25 +234,59 @@ reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Serialize" /v S
 reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v HideFileExt /t REG_DWORD /d 0 /f >nul 2>&1
 reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v RotatingLockScreenEnabled /t REG_DWORD /d 0 /f >nul 2>&1
 reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v RotatingLockScreenOverlayEnabled /t REG_DWORD /d 0 /f >nul 2>&1
+powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c >nul 2>&1
 call :log "[Perf] Done."
 exit /b
 
-:: ------------------------------------------------------ INSTALL WORK APPS ---
+:: -------------------------------------------------- GAMING TWEAKS -----------
+:gaming_tweaks
+echo.
+call :log "[Gaming] Applying gaming tweaks (Game Mode, GPU sched, power, mouse, net)..."
+:: Enable Game Mode and keep Game Bar / Game DVR working
+reg add "HKCU\SOFTWARE\Microsoft\GameBar" /v AllowAutoGameMode /t REG_DWORD /d 1 /f >nul 2>&1
+reg add "HKCU\SOFTWARE\Microsoft\GameBar" /v AutoGameModeEnabled /t REG_DWORD /d 1 /f >nul 2>&1
+reg add "HKCU\System\GameConfigStore" /v GameDVR_Enabled /t REG_DWORD /d 1 /f >nul 2>&1
+:: Hardware-accelerated GPU scheduling (HAGS) - needs supported GPU + reboot
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v HwSchMode /t REG_DWORD /d 2 /f >nul 2>&1
+:: Disable mouse acceleration for precise aim
+reg add "HKCU\Control Panel\Mouse" /v MouseSpeed /t REG_SZ /d 0 /f >nul 2>&1
+reg add "HKCU\Control Panel\Mouse" /v MouseThreshold1 /t REG_SZ /d 0 /f >nul 2>&1
+reg add "HKCU\Control Panel\Mouse" /v MouseThreshold2 /t REG_SZ /d 0 /f >nul 2>&1
+:: Visual effects -> best performance (higher FPS)
+reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f >nul 2>&1
+:: Show file extensions (handy)
+reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v HideFileExt /t REG_DWORD /d 0 /f >nul 2>&1
+:: Network latency: disable Nagle's algorithm on all interfaces (lower ping)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces' | ForEach-Object { New-ItemProperty -Path $_.PSPath -Name TcpAckFrequency -Value 1 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null; New-ItemProperty -Path $_.PSPath -Name TCPNoDelay -Value 1 -PropertyType DWord -Force -ErrorAction SilentlyContinue | Out-Null }"
+:: Power plan: Ultimate Performance (fallback to High Performance)
+powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 >nul 2>&1
+powercfg -setactive e9a42b02-d5df-448d-aa00-03f14749eb61 >nul 2>&1
+if errorlevel 1 powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c >nul 2>&1
+call :log "[Gaming] Done."
+exit /b
+
+:: ------------------------------------------------------ INSTALL APPS --------
 :install_apps
 echo.
-call :log "[Install] Installing work apps via winget..."
+call :log "[Install] Installing apps via winget (mode: %MODE%)..."
 where winget >nul 2>&1
 if errorlevel 1 (
     call :log "[Install] winget not found - skipping. Update 'App Installer' from Microsoft Store."
     exit /b
 )
-:: Edit this list to fit your company needs.
-for %%P in (Google.Chrome 7zip.7zip Adobe.Acrobat.Reader.64-bit VideoLAN.VLC Notepad++.Notepad++) do (
+:: Shared apps for both modes. Edit to fit your needs.
+set "APPLIST=Google.Chrome 7zip.7zip VideoLAN.VLC Notepad++.Notepad++"
+if /I "%MODE%"=="GAMING" (
+    set "APPLIST=!APPLIST! Valve.Steam Discord.Discord"
+) else (
+    set "APPLIST=!APPLIST! Adobe.Acrobat.Reader.64-bit"
+)
+for %%P in (!APPLIST!) do (
     echo     - Installing %%P
     call :log "[Install] %%P"
     winget install -e --id %%P --silent --accept-package-agreements --accept-source-agreements >>"%LOG%" 2>&1
 )
-call :log "[Install] Done. (Note: Microsoft Office is usually installed/licensed by your company.)"
+call :log "[Install] Done."
 exit /b
 
 :: ------------------------------------------------ EXTRA CLEANUP & PERF -------
@@ -230,9 +296,6 @@ call :log "[Extra] Cleaning temp files..."
 del /q /f /s "%TEMP%\*" >nul 2>&1
 del /q /f /s "%SystemRoot%\Temp\*" >nul 2>&1
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Clear-RecycleBin -Force -ErrorAction SilentlyContinue" >nul 2>&1
-
-call :log "[Extra] Setting High Performance power plan..."
-powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c >nul 2>&1
 
 call :log "[Extra] Disabling telemetry scheduled tasks..."
 for %%T in (
