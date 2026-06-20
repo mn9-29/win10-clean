@@ -56,6 +56,30 @@ jobs:
         if: steps.check.outputs.exists == 'false'
         run: dotnet build win10-clean-gui/win10-clean-gui.csproj -c Release
 
+      # Optional code-signing. Add repo secrets CERT_PFX_BASE64 (base64 of a
+      # .pfx) and CERT_PASSWORD to enable it; otherwise this step is skipped.
+      # NOTE: SmartScreen only stops warning with an OV/EV certificate from a
+      # trusted CA (and once reputation builds) - a self-signed cert won't help.
+      - name: Sign executable (optional)
+        if: steps.check.outputs.exists == 'false'
+        shell: pwsh
+        env:
+          CERT_PFX_BASE64: ${{ secrets.CERT_PFX_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.CERT_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrEmpty($env:CERT_PFX_BASE64)) {
+            Write-Host "No signing certificate configured - skipping signing."
+            exit 0
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP 'cert.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERT_PFX_BASE64))
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue | Select-Object -Last 1
+          if (-not $signtool) { Write-Error "signtool not found on runner."; exit 1 }
+          & $signtool.FullName sign /fd SHA256 /f $pfx /p $env:CERT_PASSWORD `
+            /tr http://timestamp.digicert.com /td SHA256 `
+            "win10-clean-gui/bin/Release/net48/win10-clean-gui.exe"
+          Write-Host "Executable signed."
+
       - name: Create GitHub Release
         if: steps.check.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2

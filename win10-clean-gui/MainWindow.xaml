@@ -39,13 +39,20 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
-            <TextBlock Text="win10-clean" Foreground="#4EC9B0" FontSize="24" FontWeight="Bold"/>
-            <TextBlock x:Name="lblVersion" Text="v2.1.0" Foreground="#888" FontSize="14"
-                       VerticalAlignment="Bottom" Margin="8,0,0,4"/>
-            <TextBlock Text="  -  tick what you want, then Apply" Foreground="#888"
-                       FontSize="13" VerticalAlignment="Bottom" Margin="6,0,0,4"/>
-        </StackPanel>
+        <Grid Grid.Row="0" Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                <TextBlock Text="win10-clean" Foreground="#4EC9B0" FontSize="24" FontWeight="Bold"/>
+                <TextBlock x:Name="lblVersion" Text="v2.2.0" Foreground="#888" FontSize="14"
+                           VerticalAlignment="Bottom" Margin="8,0,0,4"/>
+                <TextBlock Text="  -  tick what you want, then Apply" Foreground="#888"
+                           FontSize="13" VerticalAlignment="Bottom" Margin="6,0,0,4"/>
+            </StackPanel>
+            <Border HorizontalAlignment="Right" VerticalAlignment="Center"
+                    Background="#2D2D30" CornerRadius="4" Padding="12,6">
+                <TextBlock x:Name="lblRam" Text="RAM: -" FontFamily="Consolas" FontSize="14" FontWeight="Bold"
+                           Foreground="#DDDDDD"/>
+            </Border>
+        </Grid>
 
         <!-- Presets row -->
         <WrapPanel Grid.Row="1" Margin="0,0,0,10">
@@ -118,6 +125,8 @@
                            VerticalAlignment="Center" Margin="10,0,0,0"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="btnExplorer" Content="Restart Explorer" Style="{StaticResource Pill}"
+                        Background="#3A3A55" Click="btnExplorer_Click"/>
                 <Button x:Name="btnRevert" Content="Revert settings (Undo)" Style="{StaticResource Pill}"
                         Background="#5A3A1A" Click="btnRevert_Click"/>
                 <Button x:Name="btnApply" Content="APPLY SELECTED" Style="{StaticResource Pill}"

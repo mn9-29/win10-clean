@@ -3,14 +3,38 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace Win10Clean
 {
     public partial class MainWindow : Window
     {
-        const string Version = "2.1.0";
+        const string Version = "2.2.0";
+
+        // ---- live RAM meter (GlobalMemoryStatusEx) ----
+        [StructLayout(LayoutKind.Sequential)]
+        class MemoryStatusEx
+        {
+            public uint dwLength = (uint)Marshal.SizeOf(typeof(MemoryStatusEx));
+            public uint dwMemoryLoad;
+            public ulong ullTotalPhys;
+            public ulong ullAvailPhys;
+            public ulong ullTotalPageFile;
+            public ulong ullAvailPageFile;
+            public ulong ullTotalVirtual;
+            public ulong ullAvailVirtual;
+            public ulong ullAvailExtendedVirtual;
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        static extern bool GlobalMemoryStatusEx([In, Out] MemoryStatusEx lpBuffer);
+
+        DispatcherTimer _ramTimer;
 
         readonly List<TweakItem> _all = new List<TweakItem>();
         readonly ObservableCollection<TweakItem> _apps = new ObservableCollection<TweakItem>();
@@ -36,6 +60,33 @@ namespace Win10Clean
             icSystem.ItemsSource = _system;
             icInstall.ItemsSource = _install;
             ApplyPreset("WORK");
+
+            _ramTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            _ramTimer.Tick += (s, e) => UpdateRam();
+            _ramTimer.Start();
+            UpdateRam();
+        }
+
+        void UpdateRam()
+        {
+            var m = new MemoryStatusEx();
+            if (!GlobalMemoryStatusEx(m)) return;
+            double totalGB = m.ullTotalPhys / 1073741824.0;
+            double usedGB = (m.ullTotalPhys - m.ullAvailPhys) / 1073741824.0;
+            lblRam.Text = string.Format("RAM: {0:0.0} / {1:0.0} GB  ({2}%)", usedGB, totalGB, m.dwMemoryLoad);
+            lblRam.Foreground = m.dwMemoryLoad >= 85 ? Brushes.OrangeRed
+                              : m.dwMemoryLoad >= 70 ? Brushes.Orange
+                              : Brushes.LightGreen;
+        }
+
+        async void btnExplorer_Click(object sender, RoutedEventArgs e)
+        {
+            SetBusy(true);
+            txtLog.Clear();
+            Log("» Restarting Windows Explorer...");
+            await Task.Run(() => RunCmd("taskkill /f /im explorer.exe & start explorer.exe"));
+            Log("=== Explorer restarted. ===");
+            SetBusy(false);
         }
 
         // ---------------------------------------------------------- command helpers
@@ -311,6 +362,7 @@ namespace Win10Clean
             prog.IsIndeterminate = busy;
             btnApply.IsEnabled = !busy;
             btnRevert.IsEnabled = !busy;
+            btnExplorer.IsEnabled = !busy;
             btnWork.IsEnabled = !busy;
             btnGaming.IsEnabled = !busy;
             btnBasic.IsEnabled = !busy;
