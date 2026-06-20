@@ -1,12 +1,13 @@
 @echo off
 :: ============================================================================
-::  win10-clean.bat   -   Version 1.2.0
+::  win10-clean.bat   -   Version 1.3.0
 ::  Windows 10 / 11 Device Setup & Debloat - interactive edition
 ::
-::  Two modes:
+::  Three modes:
 ::    WORK    - office device: removes Xbox/games, disables Game DVR, etc.
 ::    GAMING  - keeps Xbox & Game Bar, enables Game Mode + gaming tweaks.
-::  Both modes share: junk-app removal, telemetry/ads off, cleanup, logging.
+::    BASIC   - home/family PC: junk + ads/telemetry removal only (gentle).
+::  All modes share: junk-app removal, telemetry/ads off, cleanup, logging.
 ::
 ::  KEEPS (work): Edge, Store, Office, Calculator, Photos, Notepad, Paint,
 ::               Snipping Tool, Sticky Notes.
@@ -15,7 +16,7 @@
 :: ============================================================================
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "WIN10CLEAN_VERSION=1.2.0"
+set "WIN10CLEAN_VERSION=1.3.0"
 title Windows Device Clean Setup  v%WIN10CLEAN_VERSION%
 color 0A
 
@@ -49,12 +50,14 @@ echo   What is this device mainly used for?
 echo ------------------------------------------------------------
 echo   [1] Office / Work   (removes Xbox ^& games, max focus)
 echo   [2] Gaming          (keeps Xbox/Game Bar, gaming tweaks)
+echo   [3] Basic / Home    (gentle: junk ^& ads removal only)
 echo   [0] Exit
 echo ============================================================
-choice /C 120 /N /M "Choose: "
+choice /C 1230 /N /M "Choose: "
 set "MS=%errorlevel%"
 if "%MS%"=="1" ( set "MODE=WORK"   & goto :menu )
 if "%MS%"=="2" ( set "MODE=GAMING" & goto :menu )
+if "%MS%"=="3" ( set "MODE=BASIC"  & goto :menu )
 goto :end
 
 :: ------------------------------------------------------------------- MENU ---
@@ -108,10 +111,13 @@ goto :menu
 call :log "Mode: %MODE% | Profile: %PROFILE%"
 call :restore_point
 call :remove_apps
-call :disable_services
 call :disable_telemetry
-call :disable_cortana
-if /I "%MODE%"=="GAMING" ( call :gaming_tweaks ) else ( call :disable_gamedvr & call :perf_tweaks )
+:: BASIC mode stops here (gentle): only junk apps + ads/telemetry.
+if /I not "%MODE%"=="BASIC" (
+    call :disable_services
+    call :disable_cortana
+    if /I "%MODE%"=="GAMING" ( call :gaming_tweaks ) else ( call :disable_gamedvr & call :perf_tweaks )
+)
 if "%DO_FULL%"=="1" (
     call :install_apps
     call :extra_cleanup
@@ -151,8 +157,8 @@ call :log "[Apps] Removing junk apps (mode: %MODE%, profile: %PROFILE%)..."
 set "APPS='Microsoft.MicrosoftSolitaireCollection','Microsoft.MicrosoftMahjong','king.com.CandyCrushSaga','king.com.CandyCrushSodaSaga','king.com.BubbleWitch3Saga'"
 set "APPS=!APPS!,'Microsoft.BingNews','Microsoft.BingWeather','Microsoft.BingFinance','Microsoft.BingSports'"
 set "APPS=!APPS!,'*Netflix*','*Spotify*','*Facebook*','*Twitter*','*Disney*','*TikTok*','*Hulu*','*Amazon*','*Instagram*','*Plex*','*Dropbox*','*Duolingo*','*Wunderlist*','*Asphalt*','*Royal*'"
-:: --- Xbox / gaming apps: removed in WORK mode ONLY (kept for GAMING) ---
-if /I not "%MODE%"=="GAMING" set "APPS=!APPS!,'Microsoft.XboxApp','Microsoft.XboxGameOverlay','Microsoft.XboxGamingOverlay','Microsoft.XboxSpeechToTextOverlay','Microsoft.Xbox.TCUI','Microsoft.GamingApp'"
+:: --- Xbox / gaming apps: removed in WORK mode ONLY (kept for GAMING & BASIC) ---
+if /I "%MODE%"=="WORK" set "APPS=!APPS!,'Microsoft.XboxApp','Microsoft.XboxGameOverlay','Microsoft.XboxGamingOverlay','Microsoft.XboxSpeechToTextOverlay','Microsoft.Xbox.TCUI','Microsoft.GamingApp'"
 if /I "%PROFILE%"=="LIGHT" goto :run_remove
 :: MEDIUM: + Microsoft bloat
 set "APPS=!APPS!,'Microsoft.3DBuilder','Microsoft.Microsoft3DViewer','Microsoft.Print3D','Microsoft.MixedReality.Portal'"
@@ -277,7 +283,7 @@ if errorlevel 1 (
 :: Shared apps for both modes. Edit to fit your needs.
 set "APPLIST=Google.Chrome 7zip.7zip VideoLAN.VLC Notepad++.Notepad++"
 if /I "%MODE%"=="GAMING" (
-    set "APPLIST=!APPLIST! Valve.Steam Discord.Discord"
+    set "APPLIST=!APPLIST! Valve.Steam Discord.Discord OBSProject.OBSStudio Guru3D.Afterburner"
 ) else (
     set "APPLIST=!APPLIST! Adobe.Acrobat.Reader.64-bit"
 )

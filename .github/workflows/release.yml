@@ -51,4 +51,5 @@ jobs:
           name: win10-clean v${{ steps.ver.outputs.version }}
           files: |
             win10-clean.bat
+            win10-clean-undo.bat
           generate_release_notes: true
