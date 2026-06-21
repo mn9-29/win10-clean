@@ -1,6 +1,6 @@
 @echo off
 :: ============================================================================
-::  winforge.bat   -   Version 2.7.0
+::  winforge.bat   -   Version 2.8.0
 ::  Windows 10 / 11 Device Setup & Debloat - interactive edition
 ::  (Prefer the GUI app 'WinForge.exe' for point-and-click control.)
 ::
@@ -17,7 +17,7 @@
 :: ============================================================================
 
 setlocal EnableExtensions EnableDelayedExpansion
-set "WINFORGE_VERSION=2.7.0"
+set "WINFORGE_VERSION=2.8.0"
 title WinForge  v%WINFORGE_VERSION%
 color 0A
 

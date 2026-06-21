@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:WinForge"
-        Title="WinForge" Height="740" Width="920" Icon="app.ico"
+        Title="WinForge" Height="760" Width="940" Icon="app.ico"
         WindowStartupLocation="CenterScreen" Background="{DynamicResource BgBrush}">
 
     <Window.Resources>
@@ -34,6 +34,21 @@
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
+
+        <!-- Dashboard row label -->
+        <Style x:Key="DbKey" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource FgDimBrush}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Margin" Value="0,5,0,5"/>
+        </Style>
+        <Style x:Key="DbVal" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource FgBrush}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="Margin" Value="0,5,0,5"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="14">
@@ -48,17 +63,33 @@
 
         <!-- Header -->
         <Grid Grid.Row="0" Margin="0,0,0,10">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Left">
                 <TextBlock Text="WinForge" Foreground="#4EC9B0" FontSize="24" FontWeight="Bold"/>
-                <TextBlock x:Name="lblVersion" Text="v2.7.0" Foreground="{DynamicResource FgDimBrush}" FontSize="14"
+                <TextBlock x:Name="lblVersion" Text="v2.8.0" Foreground="{DynamicResource FgDimBrush}" FontSize="14"
                            VerticalAlignment="Bottom" Margin="8,0,0,4"/>
                 <TextBlock Text="  -  tick what you want, then Apply" Foreground="{DynamicResource FgDimBrush}"
                            FontSize="13" VerticalAlignment="Bottom" Margin="6,0,0,4"/>
             </StackPanel>
-            <Border HorizontalAlignment="Right" VerticalAlignment="Center"
+            <Border Grid.Row="0" HorizontalAlignment="Right" VerticalAlignment="Center"
                     Background="{DynamicResource PanelBrush}" CornerRadius="4" Padding="12,6">
                 <TextBlock x:Name="lblRam" Text="RAM: -" FontFamily="Consolas" FontSize="14" FontWeight="Bold"
                            Foreground="#DDDDDD"/>
+            </Border>
+            <!-- Update notice bar (hidden until a newer release is found) -->
+            <Border x:Name="barUpdate" Grid.Row="1" Margin="0,10,0,0" Background="#173A1F" BorderBrush="#0E7C3A"
+                    BorderThickness="1" CornerRadius="6" Padding="12,8" Visibility="Collapsed">
+                <DockPanel LastChildFill="True">
+                    <Button x:Name="btnUpdateLater" DockPanel.Dock="Right" Content="Dismiss" Style="{StaticResource Pill}"
+                            Background="#2A2A2A" Click="btnUpdateLater_Click"/>
+                    <Button x:Name="btnUpdateGet" DockPanel.Dock="Right" Content="Download" Style="{StaticResource Pill}"
+                            Background="#0E7C3A" Click="btnUpdateGet_Click"/>
+                    <TextBlock x:Name="lblUpdate" VerticalAlignment="Center" Foreground="#CFFFD9"
+                               FontWeight="SemiBold" Text="A new version is available."/>
+                </DockPanel>
             </Border>
         </Grid>
 
@@ -79,6 +110,7 @@
         <!-- Search / select-all / sizes / theme toolbar -->
         <DockPanel Grid.Row="2" Margin="0,0,0,8" LastChildFill="True">
             <Button x:Name="btnTheme"   DockPanel.Dock="Right" Content="Light theme" Style="{StaticResource Pill}" Click="btnTheme_Click"/>
+            <Button x:Name="btnUpdates" DockPanel.Dock="Right" Content="Check updates" Style="{StaticResource Pill}" Background="#2A3A50" Click="btnUpdates_Click"/>
             <Button x:Name="btnSelAll"  DockPanel.Dock="Left"  Content="Select all (tab)" Style="{StaticResource Pill}" Click="btnSelAll_Click"/>
             <Button x:Name="btnSelNone" DockPanel.Dock="Left"  Content="None (tab)" Style="{StaticResource Pill}" Click="btnSelNone_Click"/>
             <Button x:Name="btnSizes"   DockPanel.Dock="Left"  Content="App sizes" Style="{StaticResource Pill}" Background="#3A3050" Click="btnSizes_Click"/>
@@ -89,6 +121,51 @@
 
         <!-- Tabs -->
         <TabControl x:Name="tabs" Grid.Row="3" Background="{DynamicResource PanelBrush}" BorderBrush="#444">
+            <TabItem Header="Dashboard">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="14">
+                        <TextBlock Text="System overview" Foreground="#4EC9B0" FontSize="18" FontWeight="Bold" Margin="0,0,0,12"/>
+                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="#444" BorderThickness="1" CornerRadius="8" Padding="18,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Windows"  Style="{StaticResource DbKey}"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" x:Name="dbOs"     Text="-" Style="{StaticResource DbVal}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Computer"  Style="{StaticResource DbKey}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" x:Name="dbHost"   Text="-" Style="{StaticResource DbVal}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Processor" Style="{StaticResource DbKey}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" x:Name="dbCpu"    Text="-" Style="{StaticResource DbVal}"/>
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="CPU load"  Style="{StaticResource DbKey}"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" x:Name="dbCpuUse" Text="-" Style="{StaticResource DbVal}"/>
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Memory"    Style="{StaticResource DbKey}"/>
+                                <TextBlock Grid.Row="4" Grid.Column="1" x:Name="dbRam"    Text="-" Style="{StaticResource DbVal}"/>
+                                <TextBlock Grid.Row="5" Grid.Column="0" Text="Graphics"  Style="{StaticResource DbKey}"/>
+                                <TextBlock Grid.Row="5" Grid.Column="1" x:Name="dbGpu"    Text="-" Style="{StaticResource DbVal}"/>
+                                <TextBlock Grid.Row="6" Grid.Column="0" Text="Disk C:"   Style="{StaticResource DbKey}"/>
+                                <TextBlock Grid.Row="6" Grid.Column="1" x:Name="dbDisk"   Text="-" Style="{StaticResource DbVal}"/>
+                                <TextBlock Grid.Row="7" Grid.Column="0" Text="Uptime"    Style="{StaticResource DbKey}"/>
+                                <TextBlock Grid.Row="7" Grid.Column="1" x:Name="dbUptime" Text="-" Style="{StaticResource DbVal}"/>
+                            </Grid>
+                        </Border>
+
+                        <TextBlock Text="WinForge status" Foreground="#4EC9B0" FontSize="15" FontWeight="Bold" Margin="2,18,0,8"/>
+                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="#444" BorderThickness="1" CornerRadius="8" Padding="18,12">
+                            <TextBlock x:Name="dbFlags" Text="-" Foreground="{DynamicResource FgBrush}" FontFamily="Consolas"
+                                       FontSize="13" TextWrapping="Wrap" LineHeight="22"/>
+                        </Border>
+                        <Button x:Name="btnDbRefresh" Content="Refresh" Style="{StaticResource Pill}" HorizontalAlignment="Left"
+                                Margin="0,12,0,0" Background="#2A3A50" Click="btnDbRefresh_Click"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
             <TabItem Header="Device Modes">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="8">
@@ -147,6 +224,22 @@
                     <ItemsControl x:Name="icApps" ItemTemplate="{StaticResource TweakTemplate}"/>
                 </ScrollViewer>
             </TabItem>
+            <TabItem Header="Installed (scan)">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="#444" BorderThickness="0,0,0,1" Padding="8,8">
+                            <DockPanel LastChildFill="True">
+                                <Button x:Name="btnScan" DockPanel.Dock="Right" Content="Scan this PC" Style="{StaticResource Pill}"
+                                        Background="#3A3050" Click="btnScan_Click"/>
+                                <TextBlock x:Name="lblScan" VerticalAlignment="Center" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource FgDimBrush}" FontSize="12"
+                                           Text="Scans every removable Appx package actually installed on THIS PC (with sizes). Tick the ones you want gone, then Apply."/>
+                            </DockPanel>
+                        </Border>
+                        <ItemsControl x:Name="icScan" ItemTemplate="{StaticResource TweakTemplate}"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
             <TabItem Header="Privacy / Ads">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <ItemsControl x:Name="icPrivacy" ItemTemplate="{StaticResource TweakTemplate}"/>
@@ -165,6 +258,21 @@
             <TabItem Header="Performance">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <ItemsControl x:Name="icPerf" ItemTemplate="{StaticResource TweakTemplate}"/>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="Network">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="icNetwork" ItemTemplate="{StaticResource TweakTemplate}"/>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="Updates">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="icUpdates" ItemTemplate="{StaticResource TweakTemplate}"/>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="Win 11 / UI">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="icUi" ItemTemplate="{StaticResource TweakTemplate}"/>
                 </ScrollViewer>
             </TabItem>
             <TabItem Header="Cleanup">

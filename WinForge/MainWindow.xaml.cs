@@ -5,9 +5,12 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.IO;
+using System.Net;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -17,10 +20,15 @@ namespace WinForge
 {
     public partial class MainWindow : Window
     {
-        const string Version = "2.7.0";
+        const string Version = "2.8.0";
+        // Where WinForge checks for newer releases (change if the repo is renamed).
+        const string RepoOwner = "mn9-29";
+        const string RepoName = "WinForge";
+
         string _filter = "";
         bool _dark = true;
         string _logFile;
+        string _latestUrl;
         readonly List<ICollectionView> _views = new List<ICollectionView>();
 
         // ---- live RAM meter (GlobalMemoryStatusEx) ----
@@ -42,14 +50,22 @@ namespace WinForge
         [return: MarshalAs(UnmanagedType.Bool)]
         static extern bool GlobalMemoryStatusEx([In, Out] MemoryStatusEx lpBuffer);
 
+        [DllImport("kernel32.dll")]
+        static extern ulong GetTickCount64();
+
         DispatcherTimer _ramTimer;
+        PerformanceCounter _cpuCounter;
 
         readonly List<TweakItem> _all = new List<TweakItem>();
         readonly ObservableCollection<TweakItem> _apps = new ObservableCollection<TweakItem>();
+        readonly ObservableCollection<TweakItem> _scan = new ObservableCollection<TweakItem>();
         readonly ObservableCollection<TweakItem> _privacy = new ObservableCollection<TweakItem>();
         readonly ObservableCollection<TweakItem> _services = new ObservableCollection<TweakItem>();
         readonly ObservableCollection<TweakItem> _gaming = new ObservableCollection<TweakItem>();
         readonly ObservableCollection<TweakItem> _perf = new ObservableCollection<TweakItem>();
+        readonly ObservableCollection<TweakItem> _network = new ObservableCollection<TweakItem>();
+        readonly ObservableCollection<TweakItem> _updates = new ObservableCollection<TweakItem>();
+        readonly ObservableCollection<TweakItem> _ui = new ObservableCollection<TweakItem>();
         readonly ObservableCollection<TweakItem> _cleanup = new ObservableCollection<TweakItem>();
         readonly ObservableCollection<TweakItem> _system = new ObservableCollection<TweakItem>();
         readonly ObservableCollection<TweakItem> _install = new ObservableCollection<TweakItem>();
@@ -66,26 +82,39 @@ namespace WinForge
             catch { _logFile = null; }
             BuildCatalog();
             icApps.ItemsSource = _apps;
+            icScan.ItemsSource = _scan;
             icPrivacy.ItemsSource = _privacy;
             icServices.ItemsSource = _services;
             icGaming.ItemsSource = _gaming;
             icPerf.ItemsSource = _perf;
+            icNetwork.ItemsSource = _network;
+            icUpdates.ItemsSource = _updates;
+            icUi.ItemsSource = _ui;
             icCleanup.ItemsSource = _cleanup;
             icSystem.ItemsSource = _system;
             icInstall.ItemsSource = _install;
             SetupFilters();
             ApplyPreset("WORK");
 
+            try { _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total"); _cpuCounter.NextValue(); }
+            catch { _cpuCounter = null; }
+
+            InitDashboardStatic();
+            UpdateDashboard();
+
             _ramTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
-            _ramTimer.Tick += (s, e) => UpdateRam();
+            _ramTimer.Tick += (s, e) => { UpdateRam(); UpdateDashboard(); };
             _ramTimer.Start();
             UpdateRam();
+
+            // Quietly check GitHub for a newer release (never blocks the UI).
+            _ = CheckForUpdatesAsync(false);
         }
 
         // ----------------------------------------------------------- search filter
         void SetupFilters()
         {
-            foreach (var c in new[] { _apps, _privacy, _services, _gaming, _perf, _cleanup, _system, _install })
+            foreach (var c in new[] { _apps, _scan, _privacy, _services, _gaming, _perf, _network, _updates, _ui, _cleanup, _system, _install })
             {
                 var v = CollectionViewSource.GetDefaultView(c);
                 v.Filter = o =>
@@ -106,21 +135,30 @@ namespace WinForge
         }
 
         // ------------------------------------------------- select all / none (tab)
+        // Finds the checkbox list shown on the active tab by reading the
+        // ItemsSource of the ItemsControl inside it (no brittle tab indices).
         ObservableCollection<TweakItem> ActiveCollection()
         {
-            // Index 0 is the "Device Modes" tab (no checkbox list).
-            switch (tabs.SelectedIndex)
+            var content = tabs.SelectedContent as DependencyObject;
+            var ic = FindItemsControl(content);
+            return ic?.ItemsSource as ObservableCollection<TweakItem>;
+        }
+
+        static ItemsControl FindItemsControl(DependencyObject root)
+        {
+            if (root == null) return null;
+            int n = VisualTreeHelper.GetChildrenCount(root);
+            for (int i = 0; i < n; i++)
             {
-                case 1: return _apps;
-                case 2: return _privacy;
-                case 3: return _services;
-                case 4: return _gaming;
-                case 5: return _perf;
-                case 6: return _cleanup;
-                case 7: return _system;
-                case 8: return _install;
-                default: return null;
+                var child = VisualTreeHelper.GetChild(root, i);
+                // A TabControl is itself an ItemsControl, so only accept the
+                // plain list controls that carry our TweakItem collections.
+                if (child is ItemsControl ic && ic.ItemsSource is ObservableCollection<TweakItem>)
+                    return ic;
+                var deeper = FindItemsControl(child);
+                if (deeper != null) return deeper;
             }
+            return null;
         }
 
         void SetVisibleSelection(bool sel)
@@ -256,6 +294,232 @@ namespace WinForge
             SetBusy(false);
         }
 
+        // =============================================================== Dashboard
+        // Reads things that don't change while the app is open (OS/CPU/GPU/host).
+        void InitDashboardStatic()
+        {
+            dbHost.Text = Environment.MachineName + "  \\  " + Environment.UserName;
+
+            string product = RegRead(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion", "ProductName", "Windows");
+            string disp = RegRead(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion", "DisplayVersion", "");
+            string build = RegRead(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion", "CurrentBuild", "");
+            string ubr = RegRead(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion", "UBR", "");
+            // Windows 11 still reports "Windows 10" in ProductName; correct it by build.
+            int buildNum; if (int.TryParse(build, out buildNum) && buildNum >= 22000)
+                product = product.Replace("Windows 10", "Windows 11");
+            string ver = product;
+            if (!string.IsNullOrEmpty(disp)) ver += "  " + disp;
+            if (!string.IsNullOrEmpty(build)) ver += "  (build " + build + (string.IsNullOrEmpty(ubr) ? "" : "." + ubr) + ")";
+            dbOs.Text = ver;
+
+            dbCpu.Text = RegRead(Registry.LocalMachine, @"HARDWARE\DESCRIPTION\System\CentralProcessor\0", "ProcessorNameString", "-").Trim();
+            dbGpu.Text = RegRead(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000", "DriverDesc", "-");
+        }
+
+        // Refreshes the live numbers (called on the 2s timer).
+        void UpdateDashboard()
+        {
+            if (dbRam == null) return; // not built yet
+            try
+            {
+                if (_cpuCounter != null)
+                {
+                    int load = (int)Math.Round(_cpuCounter.NextValue());
+                    dbCpuUse.Text = load + " %";
+                }
+
+                var m = new MemoryStatusEx();
+                if (GlobalMemoryStatusEx(m))
+                {
+                    double totalGB = m.ullTotalPhys / 1073741824.0;
+                    double usedGB = (m.ullTotalPhys - m.ullAvailPhys) / 1073741824.0;
+                    dbRam.Text = string.Format("{0:0.0} / {1:0.0} GB used ({2}%)", usedGB, totalGB, m.dwMemoryLoad);
+                }
+
+                try
+                {
+                    var c = new DriveInfo(Path.GetPathRoot(Environment.SystemDirectory));
+                    double totGB = c.TotalSize / 1073741824.0;
+                    double freeGB = c.AvailableFreeSpace / 1073741824.0;
+                    double usedGBd = totGB - freeGB;
+                    dbDisk.Text = string.Format("{0:0} / {1:0} GB used  ({2:0} GB free)", usedGBd, totGB, freeGB);
+                }
+                catch { }
+
+                ulong ms = GetTickCount64();
+                var up = TimeSpan.FromMilliseconds(ms);
+                dbUptime.Text = string.Format("{0}d {1}h {2}m", up.Days, up.Hours, up.Minutes);
+
+                dbFlags.Text = string.Join("\n", new[]
+                {
+                    Flag("Telemetry disabled",      RegReadInt(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry") == 0),
+                    Flag("Consumer features off",   RegReadInt(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\CloudContent", "DisableWindowsConsumerFeatures") == 1),
+                    Flag("Start suggestions off",   RegReadInt(Registry.CurrentUser,  @"SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager", "SystemPaneSuggestionsEnabled") == 0),
+                    Flag("Cortana disabled",        RegReadInt(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\Windows Search", "AllowCortana") == 0),
+                    Flag("Game DVR off",            RegReadInt(Registry.CurrentUser,  @"SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR", "AppCaptureEnabled") == 0),
+                    Flag("Advertising ID off",      RegReadInt(Registry.CurrentUser,  @"SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo", "Enabled") == 0),
+                });
+            }
+            catch { }
+        }
+
+        static string Flag(string label, bool on) => (on ? "[x] " : "[ ] ") + label;
+
+        void btnDbRefresh_Click(object sender, RoutedEventArgs e) { InitDashboardStatic(); UpdateDashboard(); }
+
+        static string RegRead(RegistryKey root, string path, string name, string fallback)
+        {
+            try { using (var k = root.OpenSubKey(path)) { var v = k?.GetValue(name); return v != null ? v.ToString() : fallback; } }
+            catch { return fallback; }
+        }
+
+        // Returns the DWORD value, or -1 if the value is missing.
+        static int RegReadInt(RegistryKey root, string path, string name)
+        {
+            try { using (var k = root.OpenSubKey(path)) { var v = k?.GetValue(name); return v is int i ? i : -1; } }
+            catch { return -1; }
+        }
+
+        // =========================================================== installed scan
+        async void btnScan_Click(object sender, RoutedEventArgs e)
+        {
+            SetBusy(true);
+            lblScan.Text = "Scanning installed packages (sizes can take a minute)...";
+            // Drop previously scanned items from the master list before rescanning.
+            foreach (var old in _scan) _all.Remove(old);
+            _scan.Clear();
+
+            string output = null;
+            await Task.Run(() => output = RunCmdCapture(
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-AppxPackage | " +
+                "Where-Object { -not $_.IsFramework -and $_.NonRemovable -ne $true } | ForEach-Object { " +
+                "$s=0; try { $s=[math]::Round((Get-ChildItem $_.InstallLocation -Recurse -ErrorAction SilentlyContinue | " +
+                "Measure-Object Length -Sum).Sum/1MB,1) } catch {}; ('{0}|{1}' -f $_.Name,$s) }\""));
+
+            int count = 0;
+            if (!string.IsNullOrEmpty(output))
+            {
+                var rows = new List<KeyValuePair<string, double>>();
+                foreach (var line in output.Split('\n'))
+                {
+                    var t = line.Trim();
+                    int bar = t.IndexOf('|');
+                    if (bar <= 0) continue;
+                    string name = t.Substring(0, bar);
+                    double mb; double.TryParse(t.Substring(bar + 1).Trim(),
+                        System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out mb);
+                    rows.Add(new KeyValuePair<string, double>(name, mb));
+                }
+                foreach (var r in rows.OrderByDescending(x => x.Value))
+                {
+                    string shortName = r.Key.Contains(".") ? r.Key.Substring(r.Key.LastIndexOf('.') + 1) : r.Key;
+                    var it = new TweakItem
+                    {
+                        Title = shortName + (r.Value > 0 ? string.Format("  -  {0:0.#} MB", r.Value) : ""),
+                        Description = r.Key,
+                        Commands = new[] { RemoveAppx(r.Key) },
+                        Work = false, Gaming = false, Basic = false
+                    };
+                    _scan.Add(it);
+                    _all.Add(it);
+                    count++;
+                }
+            }
+            lblScan.Text = count > 0
+                ? count + " removable packages found. Tick what you want gone, then APPLY SELECTED."
+                : "No packages returned (try running as administrator).";
+            SetBusy(false);
+        }
+
+        // Runs a command and returns its combined stdout/stderr (no logging).
+        string RunCmdCapture(string command)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo("cmd.exe", "/c " + command)
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                };
+                using (var p = Process.Start(psi))
+                {
+                    string outp = p.StandardOutput.ReadToEnd();
+                    string err = p.StandardError.ReadToEnd();
+                    p.WaitForExit();
+                    return (outp + err).Replace("\r\n", "\n");
+                }
+            }
+            catch (Exception ex) { return "ERROR: " + ex.Message; }
+        }
+
+        // ============================================================ self-update
+        void btnUpdates_Click(object sender, RoutedEventArgs e) => _ = CheckForUpdatesAsync(true);
+        void btnUpdateLater_Click(object sender, RoutedEventArgs e) => barUpdate.Visibility = Visibility.Collapsed;
+        void btnUpdateGet_Click(object sender, RoutedEventArgs e) =>
+            OpenUrl(_latestUrl ?? "https://github.com/" + RepoOwner + "/" + RepoName + "/releases/latest");
+
+        // Asks GitHub for the latest release tag and compares it to this build.
+        // 'interactive' = show a popup with the result (button), else stay silent.
+        async Task CheckForUpdatesAsync(bool interactive)
+        {
+            if (interactive) lblStatus.Text = "Checking for updates...";
+            string tag = null, url = null;
+            try
+            {
+                await Task.Run(() =>
+                {
+                    ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+                    using (var wc = new WebClient())
+                    {
+                        wc.Headers.Add("User-Agent", "WinForge");
+                        string json = wc.DownloadString(
+                            "https://api.github.com/repos/" + RepoOwner + "/" + RepoName + "/releases/latest");
+                        var mt = Regex.Match(json, "\"tag_name\"\\s*:\\s*\"([^\"]+)\"");
+                        if (mt.Success) tag = mt.Groups[1].Value;
+                        var mu = Regex.Match(json, "\"html_url\"\\s*:\\s*\"([^\"]+)\"");
+                        if (mu.Success) url = mu.Groups[1].Value;
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                if (interactive) MessageBox.Show("Could not check for updates:\n" + ex.Message,
+                    "WinForge", MessageBoxButton.OK, MessageBoxImage.Warning);
+                lblStatus.Text = "Ready";
+                return;
+            }
+
+            System.Version remote = ParseVer(tag), local = ParseVer(Version);
+            if (remote != null && local != null && remote > local)
+            {
+                _latestUrl = url;
+                lblUpdate.Text = "WinForge " + tag + " is available (you have v" + Version + ").";
+                barUpdate.Visibility = Visibility.Visible;
+                lblStatus.Text = "Update available: " + tag;
+            }
+            else
+            {
+                lblStatus.Text = "Ready";
+                if (interactive) MessageBox.Show("You're on the latest version (v" + Version + ").",
+                    "WinForge", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+
+        static System.Version ParseVer(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return null;
+            var m = Regex.Match(s, "[0-9]+(\\.[0-9]+){1,3}");
+            System.Version v; return m.Success && System.Version.TryParse(m.Value, out v) ? v : null;
+        }
+
+        static void OpenUrl(string url)
+        {
+            try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
+        }
+
         // ---------------------------------------------------------- command helpers
         static string RemoveAppx(string name) =>
             "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-AppxPackage -AllUsers '" + name +
@@ -374,6 +638,8 @@ namespace WinForge
                 RegDword(@"HKLM\SOFTWARE\Policies\Microsoft\Windows\System", "PublishUserActivities", 0));
             Add(_privacy, "Disable Cortana", "Turns off Cortana via policy.", true, true, true,
                 RegDword(@"HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search", "AllowCortana", 0));
+            Add(_privacy, "Block telemetry domains (hosts file)", "Adds Microsoft telemetry servers to the hosts file so they resolve to nothing. Advanced - off by default.", false, false, false,
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$h=$env:windir+'\\System32\\drivers\\etc\\hosts'; $d='vortex.data.microsoft.com','telemetry.microsoft.com','watson.telemetry.microsoft.com','settings-win.data.microsoft.com','v10.events.data.microsoft.com'; $c=@(Get-Content $h -ErrorAction SilentlyContinue); foreach($x in $d){ if($c -notcontains ('0.0.0.0 '+$x)){ Add-Content $h ('0.0.0.0 '+$x) } }\"");
 
             // ---- Services (Work + Gaming; Basic leaves them alone) ----
             Add(_services, "Xbox services", "Xbox Live auth/save/networking services.", true, false, false,
@@ -458,6 +724,54 @@ namespace WinForge
             Add(_install, "Discord", "Voice/chat.", false, false, false, Winget("Discord.Discord"));
             Add(_install, "OBS Studio", "Recording/streaming.", false, false, false, Winget("OBSProject.OBSStudio"));
             Add(_install, "MSI Afterburner", "GPU overclock/monitor.", false, false, false, Winget("Guru3D.Afterburner"));
+
+            BuildExtra();
+        }
+
+        // ---- Network / Windows Update / Win11-UI tweaks (all opt-in) ----
+        void BuildExtra()
+        {
+            // ---- Network ----
+            Add(_network, "DNS -> Cloudflare (1.1.1.1)", "Sets fast, private DNS on every active adapter.", false, false, false,
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-NetAdapter | Where-Object Status -eq 'Up' | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ServerAddresses ('1.1.1.1','1.0.0.1') }\"");
+            Add(_network, "DNS -> Google (8.8.8.8)", "Sets Google DNS on every active adapter.", false, false, false,
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-NetAdapter | Where-Object Status -eq 'Up' | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ServerAddresses ('8.8.8.8','8.8.4.4') }\"");
+            Add(_network, "DNS -> automatic (DHCP)", "Restores DNS to whatever your router/ISP provides.", false, false, false,
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-NetAdapter | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ResetServerAddresses }\"");
+            Add(_network, "Flush DNS cache", "Clears the resolver cache (fixes stale lookups).", false, false, false,
+                "ipconfig /flushdns");
+            Add(_network, "Release & renew IP", "Drops and re-requests your DHCP lease.", false, false, false,
+                "ipconfig /release", "ipconfig /renew");
+            Add(_network, "Reset Winsock (reboot needed)", "Resets the Winsock catalog - fixes broken networking.", false, false, false,
+                "netsh winsock reset");
+            Add(_network, "Reset TCP/IP stack (reboot needed)", "Reinstalls TCP/IP - last-resort connectivity fix.", false, false, false,
+                "netsh int ip reset");
+
+            // ---- Windows Update ----
+            Add(_updates, "Updates: notify before download/install", "Stops automatic downloads - Windows asks you first.", false, false, false,
+                RegDword(@"HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "NoAutoUpdate", 0),
+                RegDword(@"HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "AUOptions", 2));
+            Add(_updates, "No auto-restart while signed in", "Windows won't reboot for updates while you are logged on.", false, false, false,
+                RegDword(@"HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "NoAutoRebootWithLoggedOnUsers", 1));
+            Add(_updates, "Exclude driver updates from Windows Update", "Keeps Windows Update from replacing your drivers.", false, false, false,
+                RegDword(@"HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate", "ExcludeWUDriversInQualityUpdate", 1));
+            Add(_updates, "Defer feature updates 365 days", "Holds back big Windows version upgrades for a year.", false, false, false,
+                RegDword(@"HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate", "DeferFeatureUpdates", 1),
+                RegDword(@"HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate", "DeferFeatureUpdatesPeriodInDays", 365));
+
+            // ---- Win 11 / UI (most need an Explorer restart to show) ----
+            Add(_ui, "Classic right-click menu (Win11)", "Brings back the full Windows 10 context menu. Restart Explorer after.", false, false, false,
+                "reg add \"HKCU\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\\InprocServer32\" /ve /d \"\" /f");
+            Add(_ui, "Taskbar: align to the left", "Moves the Start button and icons to the left (Win11).", false, false, false,
+                RegDword(@"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "TaskbarAl", 0));
+            Add(_ui, "Hide taskbar Widgets button", "Removes the weather/widgets button (Win11).", false, false, false,
+                RegDword(@"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "TaskbarDa", 0));
+            Add(_ui, "Hide taskbar Chat/Copilot button", "Removes the Chat (Teams) button (Win11).", false, false, false,
+                RegDword(@"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "TaskbarMn", 0));
+            Add(_ui, "Hide taskbar search box", "Collapses the search box to nothing.", false, false, false,
+                RegDword(@"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Search", "SearchboxTaskbarMode", 0));
+            Add(_ui, "Show seconds in the clock", "Adds seconds to the system tray clock.", false, false, false,
+                RegDword(@"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "ShowSecondsInSystemClock", 1));
         }
 
         // Reads the actual Run-key startup programs on this machine and adds a
@@ -754,7 +1068,15 @@ namespace WinForge
             "powercfg -setactive 381b4222-f694-41f0-9685-ff5bb260df2e",
             // Re-enable scheduled tasks
             "schtasks /Change /TN \"\\Microsoft\\Windows\\Application Experience\\Microsoft Compatibility Appraiser\" /Enable",
-            "schtasks /Change /TN \"\\Microsoft\\Windows\\Customer Experience Improvement Program\\Consolidator\" /Enable"
+            "schtasks /Change /TN \"\\Microsoft\\Windows\\Customer Experience Improvement Program\\Consolidator\" /Enable",
+            // Undo Windows Update policy tweaks
+            "reg delete \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU\" /v NoAutoUpdate /f",
+            "reg delete \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU\" /v AUOptions /f",
+            "reg delete \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU\" /v NoAutoRebootWithLoggedOnUsers /f",
+            "reg delete \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\" /v ExcludeWUDriversInQualityUpdate /f",
+            "reg delete \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\" /v DeferFeatureUpdates /f",
+            // Restore the Windows 11 context menu (remove the classic-menu override)
+            "reg delete \"HKCU\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\" /f"
         };
     }
 }
