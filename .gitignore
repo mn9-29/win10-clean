@@ -5,3 +5,7 @@
 
 # Logs produced by the tool
 winforge_*.log
+WinForge-UI-preview.html
+
+# CI-generated embedded UI bundle
+WinForge/Assets/

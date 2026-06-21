@@ -18,4 +18,23 @@
     <Resource Include="app.ico" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2592.51" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+  </ItemGroup>
+
+  <!-- The built React UI is zipped into Assets/app.zip by CI and embedded.
+       If it's missing (e.g. a dev build without the web step), the app
+       falls back to the classic WPF window at runtime. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\app.zip" Condition="Exists('Assets\app.zip')">
+      <LogicalName>WinForge.app.zip</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
 </Project>

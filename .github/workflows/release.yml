@@ -1,9 +1,9 @@
 name: Release
 
-# Builds the WPF GUI (.exe) and publishes a GitHub Release whenever the
-# version inside winforge.bat changes (on push to master) or on manual run.
-# To cut a new version: bump WINFORGE_VERSION in winforge.bat, update
-# CHANGELOG.md, push to master -> the Release is created automatically.
+# Builds the React UI + WPF/WebView2 GUI and publishes a GitHub Release
+# whenever the version inside winforge.bat changes (push to master) or on
+# manual run. The .exe now ships with WebView2/Newtonsoft DLLs, so the
+# release artifact is a ZIP of the whole output folder.
 on:
   push:
     branches: [ master ]
@@ -12,6 +12,7 @@ on:
       - 'winforge-undo.bat'
       - 'CHANGELOG.md'
       - 'WinForge/**'
+      - 'web/**'
   workflow_dispatch:
 
 permissions:
@@ -46,6 +47,27 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Setup Node
+        if: steps.check.outputs.exists == 'false'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build React UI
+        if: steps.check.outputs.exists == 'false'
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Bundle UI into the app
+        if: steps.check.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path WinForge/Assets | Out-Null
+          if (Test-Path WinForge/Assets/app.zip) { Remove-Item WinForge/Assets/app.zip }
+          Compress-Archive -Path web/dist/* -DestinationPath WinForge/Assets/app.zip -Force
+
       - name: Setup .NET
         if: steps.check.outputs.exists == 'false'
         uses: actions/setup-dotnet@v4
@@ -58,8 +80,6 @@ jobs:
 
       # Optional code-signing. Add repo secrets CERT_PFX_BASE64 (base64 of a
       # .pfx) and CERT_PASSWORD to enable it; otherwise this step is skipped.
-      # NOTE: SmartScreen only stops warning with an OV/EV certificate from a
-      # trusted CA (and once reputation builds) - a self-signed cert won't help.
       - name: Sign executable (optional)
         if: steps.check.outputs.exists == 'false'
         shell: pwsh
@@ -80,13 +100,16 @@ jobs:
             "WinForge/bin/Release/net48/WinForge.exe"
           Write-Host "Executable signed."
 
-      - name: Generate SHA256 checksum
+      - name: Package release ZIP + checksum
         if: steps.check.outputs.exists == 'false'
         shell: pwsh
         run: |
-          $exe = "WinForge/bin/Release/net48/WinForge.exe"
-          (Get-FileHash $exe -Algorithm SHA256).Hash | Out-File -Encoding ascii "$exe.sha256"
-          Write-Host "SHA256: $(Get-Content "$exe.sha256")"
+          $ver = "${{ steps.ver.outputs.version }}"
+          $out = "WinForge/bin/Release/net48"
+          $zip = "WinForge-v$ver.zip"
+          Compress-Archive -Path "$out/*" -DestinationPath $zip -Force
+          (Get-FileHash $zip -Algorithm SHA256).Hash | Out-File -Encoding ascii "$zip.sha256"
+          Write-Host "Packaged $zip ($((Get-Item $zip).Length) bytes)"
 
       - name: Create GitHub Release
         if: steps.check.outputs.exists == 'false'
@@ -95,8 +118,8 @@ jobs:
           tag_name: v${{ steps.ver.outputs.version }}
           name: WinForge v${{ steps.ver.outputs.version }}
           files: |
+            WinForge-v${{ steps.ver.outputs.version }}.zip
+            WinForge-v${{ steps.ver.outputs.version }}.zip.sha256
             winforge.bat
             winforge-undo.bat
-            WinForge/bin/Release/net48/WinForge.exe
-            WinForge/bin/Release/net48/WinForge.exe.sha256
           generate_release_notes: true

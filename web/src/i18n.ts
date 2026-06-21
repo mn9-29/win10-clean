@@ -1,0 +1,145 @@
+export type Lang = 'en' | 'ar'
+
+export type DictKey =
+  | 'dashboard' | 'deviceModes' | 'apps' | 'privacy' | 'services' | 'gaming'
+  | 'performance' | 'network' | 'updates' | 'ui' | 'maintenance' | 'cleanup'
+  | 'system' | 'install' | 'installed'
+  | 'presetOffice' | 'presetGaming' | 'presetBasic' | 'presetClear'
+  | 'search' | 'selectAll' | 'selectNone' | 'about' | 'theme' | 'language'
+  | 'restorePoint' | 'backupReg'
+  | 'dockerPrune' | 'restartExplorer' | 'revert' | 'applySelected'
+  | 'logConsole' | 'ready' | 'selected' | 'items' | 'presets'
+  | 'activate' | 'gamingMode' | 'programmingMode' | 'officeMode'
+  | 'os' | 'computer' | 'cpu' | 'memory' | 'gpu' | 'disk' | 'uptime' | 'statusCard'
+  | 'gamingModeDesc' | 'programmingModeDesc' | 'officeModeDesc'
+  | 'used' | 'total' | 'load' | 'aboutText' | 'noItems' | 'scan' | 'scanRunning'
+
+type Dict = Record<DictKey, string>
+
+const en: Dict = {
+  dashboard: 'Dashboard',
+  deviceModes: 'Device Modes',
+  apps: 'Apps / Games',
+  privacy: 'Privacy / Ads',
+  services: 'Services',
+  gaming: 'Gaming',
+  performance: 'Performance',
+  network: 'Network',
+  updates: 'Updates',
+  ui: 'Win 11 / UI',
+  maintenance: 'Maintenance',
+  cleanup: 'Cleanup',
+  system: 'WSL / Startup',
+  install: 'Install (winget)',
+  installed: 'Installed (scan)',
+  presetOffice: 'Office / Work',
+  presetGaming: 'Gaming',
+  presetBasic: 'Basic / Home',
+  presetClear: 'Clear',
+  search: 'Search tweaks…',
+  selectAll: 'All',
+  selectNone: 'None',
+  about: 'About',
+  theme: 'Theme',
+  language: 'Language',
+  restorePoint: 'Create restore point',
+  backupReg: 'Backup registry',
+  dockerPrune: 'Docker Prune',
+  restartExplorer: 'Restart Explorer',
+  revert: 'Revert (Undo)',
+  applySelected: 'APPLY SELECTED',
+  logConsole: 'Log console',
+  ready: 'Ready',
+  selected: 'selected',
+  items: 'items',
+  presets: 'Presets',
+  activate: 'ACTIVATE',
+  gamingMode: 'Gaming',
+  programmingMode: 'Programming',
+  officeMode: 'Office',
+  os: 'Operating System',
+  computer: 'Computer',
+  cpu: 'CPU',
+  memory: 'Memory',
+  gpu: 'GPU',
+  disk: 'Disk (C:)',
+  uptime: 'Uptime',
+  statusCard: 'WinForge status',
+  gamingModeDesc: 'Keeps Xbox & Game Bar, enables Game Mode, GPU scheduling and low-latency network tweaks for maximum FPS.',
+  programmingModeDesc: 'Dev-focused: installs core tooling, tunes WSL2 memory, trims startup and keeps the machine responsive.',
+  officeModeDesc: 'Removes games & bloat, disables telemetry and distractions for a clean, focused work device.',
+  used: 'Used',
+  total: 'Total',
+  load: 'Load',
+  aboutText: 'WinForge is a one-click Windows debloat, tweak and maintenance utility. This is the standalone web UI running on mock data.',
+  noItems: 'No items match your search.',
+  scan: 'Scan installed apps',
+  scanRunning: 'Scanning installed apps…',
+}
+
+const ar: Dict = {
+  dashboard: 'لوحة التحكم',
+  deviceModes: 'أوضاع الجهاز',
+  apps: 'التطبيقات / الألعاب',
+  privacy: 'الخصوصية / الإعلانات',
+  services: 'الخدمات',
+  gaming: 'الألعاب',
+  performance: 'الأداء',
+  network: 'الشبكة',
+  updates: 'التحديثات',
+  ui: 'ويندوز 11 / الواجهة',
+  maintenance: 'الصيانة',
+  cleanup: 'التنظيف',
+  system: 'WSL / بدء التشغيل',
+  install: 'تثبيت (winget)',
+  installed: 'المُثبّتة (فحص)',
+  presetOffice: 'المكتب / العمل',
+  presetGaming: 'الألعاب',
+  presetBasic: 'أساسي / المنزل',
+  presetClear: 'مسح',
+  search: 'ابحث في التعديلات…',
+  selectAll: 'الكل',
+  selectNone: 'لا شيء',
+  about: 'حول',
+  theme: 'السمة',
+  language: 'اللغة',
+  restorePoint: 'إنشاء نقطة استعادة',
+  backupReg: 'نسخ احتياطي للسجل',
+  dockerPrune: 'تنظيف Docker',
+  restartExplorer: 'إعادة تشغيل المستكشف',
+  revert: 'تراجع (تراجع)',
+  applySelected: 'تطبيق المحدد',
+  logConsole: 'سجل العمليات',
+  ready: 'جاهز',
+  selected: 'محدد',
+  items: 'عناصر',
+  presets: 'الإعدادات المسبقة',
+  activate: 'تفعيل',
+  gamingMode: 'الألعاب',
+  programmingMode: 'البرمجة',
+  officeMode: 'المكتب',
+  os: 'نظام التشغيل',
+  computer: 'الكمبيوتر',
+  cpu: 'المعالج',
+  memory: 'الذاكرة',
+  gpu: 'كرت الشاشة',
+  disk: 'القرص (C:)',
+  uptime: 'مدة التشغيل',
+  statusCard: 'حالة WinForge',
+  gamingModeDesc: 'يبقي على Xbox وGame Bar، ويُفعّل وضع الألعاب وجدولة كرت الشاشة وتحسينات الشبكة لأعلى عدد إطارات.',
+  programmingModeDesc: 'موجّه للمطورين: يثبّت الأدوات الأساسية ويضبط ذاكرة WSL2 ويقلّل برامج بدء التشغيل.',
+  officeModeDesc: 'يزيل الألعاب والبرامج الزائدة ويعطّل التتبّع والمشتتات لجهاز عمل نظيف ومركّز.',
+  used: 'مُستخدم',
+  total: 'الإجمالي',
+  load: 'الحمل',
+  aboutText: 'WinForge أداة بنقرة واحدة لإزالة الزوائد وتعديل وصيانة ويندوز. هذه واجهة الويب المستقلة تعمل ببيانات تجريبية.',
+  noItems: 'لا توجد عناصر مطابقة لبحثك.',
+  scan: 'فحص التطبيقات المثبتة',
+  scanRunning: 'جارٍ فحص التطبيقات المثبتة…',
+}
+
+export const dictionaries: Record<Lang, Dict> = { en, ar }
+
+export function t(lang: Lang, key: DictKey): string {
+  return dictionaries[lang][key] ?? key
+}
