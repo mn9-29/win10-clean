@@ -20,7 +20,7 @@ namespace WinForge
 {
     public partial class MainWindow : Window
     {
-        const string Version = "2.9.0";
+        const string Version = "2.10.0";
         // Where WinForge checks for newer releases (change if the repo is renamed).
         const string RepoOwner = "mn9-29";
         const string RepoName = "WinForge";
@@ -28,6 +28,7 @@ namespace WinForge
         string _filter = "";
         bool _dark = true;
         bool _arabic = false;
+        string _lastPreset = "WORK";
         string _logFile;
         string _latestUrl;
         readonly List<ICollectionView> _views = new List<ICollectionView>();
@@ -97,7 +98,10 @@ namespace WinForge
             icSystem.ItemsSource = _system;
             icInstall.ItemsSource = _install;
             SetupFilters();
-            ApplyPreset("WORK");
+            LoadSettings();          // restores theme / language / last preset
+            ApplyTheme();
+            ApplyLanguage();
+            ApplyPreset(_lastPreset);
 
             try { _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total"); _cpuCounter.NextValue(); }
             catch { _cpuCounter = null; }
@@ -235,6 +239,7 @@ namespace WinForge
         {
             _dark = !_dark;
             ApplyTheme();
+            SaveSettings();
         }
 
         void ApplyTheme()
@@ -416,10 +421,13 @@ namespace WinForge
                 foreach (var r in rows.OrderByDescending(x => x.Value))
                 {
                     string shortName = r.Key.Contains(".") ? r.Key.Substring(r.Key.LastIndexOf('.') + 1) : r.Key;
+                    string dispTitle = shortName + (r.Value > 0 ? string.Format("  -  {0:0.#} MB", r.Value) : "");
                     var it = new TweakItem
                     {
-                        Title = shortName + (r.Value > 0 ? string.Format("  -  {0:0.#} MB", r.Value) : ""),
+                        Title = dispTitle,
                         Description = r.Key,
+                        TitleEn = dispTitle,
+                        DescEn = r.Key,
                         Commands = new[] { RemoveAppx(r.Key) },
                         Work = false, Gaming = false, Basic = false
                     };
@@ -606,6 +614,7 @@ namespace WinForge
         {
             _arabic = !_arabic;
             ApplyLanguage();
+            SaveSettings();
         }
 
         void ApplyLanguage()
@@ -628,6 +637,7 @@ namespace WinForge
             btnSizes.Content   = L("App sizes", "أحجام البرامج");
             btnUpdates.Content = L("Check updates", "فحص التحديثات");
             btnLang.Content    = _arabic ? "English" : "العربية";
+            btnAbout.Content   = L("About", "عن البرنامج");
             btnTheme.Content   = _dark ? L("Light theme", "الثيم الفاتح") : L("Dark theme", "الثيم الداكن");
             txtSearch.ToolTip  = L("Filter items by name...", "ابحث بالاسم...");
 
@@ -654,7 +664,176 @@ namespace WinForge
                             "الصيانة", "التنظيف", "WSL/الإقلاع", "تثبيت (winget)" };
             for (int i = 0; i < tabs.Items.Count && i < en.Length; i++)
                 if (tabs.Items[i] is TabItem ti) ti.Header = _arabic ? ar[i] : en[i];
+
+            // Translate the individual tweak titles/descriptions where we have
+            // an Arabic entry; everything else falls back to its English text.
+            foreach (var it in _all)
+            {
+                if (_arabic && it.TitleEn != null && _arMap.TryGetValue(it.TitleEn, out var t))
+                {
+                    it.Title = t.Item1;
+                    it.Description = t.Item2 ?? it.DescEn;
+                }
+                else
+                {
+                    it.Title = it.TitleEn;
+                    it.Description = it.DescEn;
+                }
+            }
         }
+
+        // ============================================================= settings
+        static string SettingsFile => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinForge", "settings.ini");
+
+        void LoadSettings()
+        {
+            try
+            {
+                if (!File.Exists(SettingsFile)) return;
+                foreach (var line in File.ReadAllLines(SettingsFile))
+                {
+                    var kv = line.Split(new[] { '=' }, 2);
+                    if (kv.Length != 2) continue;
+                    string k = kv[0].Trim(), v = kv[1].Trim();
+                    if (k == "theme") _dark = v != "light";
+                    else if (k == "lang") _arabic = v == "ar";
+                    else if (k == "preset" && v.Length > 0) _lastPreset = v;
+                }
+            }
+            catch { }
+        }
+
+        void SaveSettings()
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(SettingsFile));
+                File.WriteAllLines(SettingsFile, new[]
+                {
+                    "theme=" + (_dark ? "dark" : "light"),
+                    "lang=" + (_arabic ? "ar" : "en"),
+                    "preset=" + _lastPreset
+                });
+            }
+            catch { }
+        }
+
+        void btnAbout_Click(object sender, RoutedEventArgs e)
+        {
+            string url = "https://github.com/" + RepoOwner + "/" + RepoName;
+            MessageBox.Show(
+                L("WinForge v" + Version + "\n\nA one-click Windows debloat, tweak & maintenance tool.\n\n" +
+                  "Source & releases:\n" + url,
+                  "وين فورج v" + Version + "\n\nأداة بضغطة زر لتنظيف وتحسين وصيانة ويندوز.\n\n" +
+                  "المصدر والإصدارات:\n" + url),
+                L("About WinForge", "عن WinForge"), MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        // Arabic strings for the curated catalog items, keyed by English title.
+        // Item2 is the Arabic description (dynamic scan/startup items aren't here).
+        readonly Dictionary<string, (string, string)> _arMap = new Dictionary<string, (string, string)>
+        {
+            // Apps / Games
+            ["Xbox app + Game Bar"] = ("تطبيق Xbox + Game Bar", "حِزم Xbox والـ overlays وشريط الألعاب."),
+            ["Solitaire Collection"] = ("سوليتير", "لعبة سوليتير (فيها إعلانات)."),
+            ["Mahjong"] = ("ماهجونغ", "لعبة Microsoft Mahjong."),
+            ["Candy Crush"] = ("كاندي كراش", "Candy Crush Saga / Soda."),
+            ["Bubble Witch"] = ("بابل ويتش", "Bubble Witch 3 Saga."),
+            ["Bing News / Weather / etc."] = ("أخبار/طقس Bing", "أخبار وطقس ومال ورياضة Bing."),
+            ["3rd-party preinstalled stubs"] = ("برامج طرف ثالث معلّبة", "Netflix و Spotify و TikTok و Facebook و Disney..."),
+            ["Skype"] = ("سكايب", "تطبيق Skype."),
+            ["Maps"] = ("الخرائط", "خرائط ويندوز."),
+            ["People"] = ("جهات الاتصال", "تطبيق People."),
+            ["Your Phone"] = ("هاتفك", "Phone Link / Your Phone."),
+            ["Get Help + Tips"] = ("المساعدة + التلميحات", "Get Help و Get Started."),
+            ["3D Builder / Viewer"] = ("أدوات 3D", "3D Builder و3D Viewer وPrint 3D."),
+            ["Mixed Reality Portal"] = ("بوابة الواقع المختلط", "Mixed Reality Portal."),
+            ["Groove Music + Movies & TV"] = ("Groove + أفلام وتلفزيون", "مشغّلات Zune للصوت والفيديو."),
+            ["Feedback Hub"] = ("مركز الملاحظات", "Feedback Hub."),
+            ["Office Hub"] = ("Office Hub", "تطبيق My Office."),
+            ["Alarms & Clock"] = ("المنبّه والساعة", "تطبيق المنبّهات."),
+            ["To Do"] = ("To Do", "مهام Microsoft To Do."),
+            ["Clipchamp"] = ("Clipchamp", "محرّر فيديو Clipchamp."),
+            // Privacy
+            ["Disable telemetry"] = ("تعطيل التتبّع (Telemetry)", "تخفيض بيانات التشخيص لأدنى مستوى."),
+            ["Disable suggested apps / consumer features"] = ("تعطيل التطبيقات المقترحة", "إيقاف تثبيت ويندوز للتطبيقات المقترحة تلقائياً."),
+            ["Disable Start menu suggestions/ads"] = ("تعطيل اقتراحات/إعلانات ابدأ", "إيقاف التلميحات والتطبيقات المروَّجة في قائمة ابدأ."),
+            ["Disable advertising ID"] = ("تعطيل معرّف الإعلانات", "منع التطبيقات من استخدام معرّف إعلاناتك."),
+            ["Disable activity history / timeline"] = ("تعطيل سجل النشاط", "إيقاف جمع ومزامنة نشاطك."),
+            ["Disable Cortana"] = ("تعطيل Cortana", "إيقاف كورتانا عبر السياسة."),
+            ["Block telemetry domains (hosts file)"] = ("حجب نطاقات التتبّع (hosts)", "إضافة خوادم تتبّع مايكروسوفت لملف hosts. متقدّم."),
+            // Services
+            ["Xbox services"] = ("خدمات Xbox", "خدمات مصادقة/حفظ/شبكة Xbox Live."),
+            ["Connected User Experiences (DiagTrack)"] = ("DiagTrack", "خدمة التتبّع الرئيسية."),
+            ["WAP Push (dmwappushservice)"] = ("WAP Push", "ناقل تتبّع إدارة الأجهزة."),
+            ["Downloaded Maps Manager"] = ("مدير الخرائط المنزّلة", "تحديثات الخرائط بالخلفية."),
+            ["Retail Demo"] = ("Retail Demo", "خدمة العرض التجاري للمتاجر."),
+            ["Windows Media Player Network Sharing"] = ("مشاركة شبكة WMP", "خدمة بثّ الوسائط."),
+            ["Fax"] = ("الفاكس", "خدمة الفاكس."),
+            ["Remote Registry"] = ("الريجستري عن بُعد", "وصول للريجستري عن بُعد (أمان)."),
+            // Gaming
+            ["Enable Game Mode"] = ("تفعيل وضع الألعاب", "إعطاء الألعاب أولوية لأداء أفضل."),
+            ["Hardware-accelerated GPU scheduling"] = ("جدولة GPU بالعتاد", "تفعيل HAGS (يحتاج GPU مدعوم + إعادة تشغيل)."),
+            ["Disable mouse acceleration"] = ("تعطيل تسارع الماوس", "حركة ماوس 1:1 لدقة التصويب."),
+            ["Visual effects -> performance"] = ("المؤثّرات البصرية → الأداء", "تعطيل الأنيميشن لرفع الإطارات."),
+            ["Lower network latency (disable Nagle)"] = ("خفض زمن الشبكة (Nagle)", "تعطيل Nagle على كل الكروت (بنق أقل)."),
+            ["Ultimate Performance power plan"] = ("خطة الأداء القصوى", "أعلى خطة طاقة أداءً."),
+            // Performance
+            ["High Performance power plan"] = ("خطة الأداء العالي", "التبديل لخطة الأداء العالي."),
+            ["Disable Game DVR (background recording)"] = ("تعطيل Game DVR", "إيقاف تسجيل شريط الألعاب بالخلفية."),
+            ["Reduce startup app delay"] = ("تقليل تأخير بدء التطبيقات", "إزالة التأخير الاصطناعي عند الإقلاع."),
+            ["Show file extensions"] = ("إظهار امتدادات الملفات", "إظهار الامتدادات دائماً (أأمن)."),
+            ["Disable lock screen ads (Spotlight)"] = ("تعطيل إعلانات شاشة القفل", "استخدام صورة قفل ثابتة."),
+            // Network
+            ["DNS -> Cloudflare (1.1.1.1)"] = ("DNS → Cloudflare", "DNS سريع وخاص على كل كرت نشط."),
+            ["DNS -> Google (8.8.8.8)"] = ("DNS → Google", "DNS جوجل على كل كرت نشط."),
+            ["DNS -> automatic (DHCP)"] = ("DNS → تلقائي", "إرجاع DNS لما يوفّره الراوتر/المزوّد."),
+            ["Flush DNS cache"] = ("مسح كاش DNS", "تفريغ ذاكرة المحلِّل."),
+            ["Release & renew IP"] = ("تجديد عنوان IP", "تحرير وإعادة طلب الـ IP."),
+            ["Reset Winsock (reboot needed)"] = ("إعادة ضبط Winsock", "إصلاح كتالوج Winsock (يحتاج إعادة تشغيل)."),
+            ["Reset TCP/IP stack (reboot needed)"] = ("إعادة ضبط TCP/IP", "إعادة تثبيت TCP/IP (حلّ أخير)."),
+            // Updates
+            ["Updates: notify before download/install"] = ("التحديثات: إشعار قبل التنزيل", "إيقاف التنزيل التلقائي - ويندوز يسألك أولاً."),
+            ["No auto-restart while signed in"] = ("منع إعادة التشغيل التلقائي", "لا يعيد ويندوز التشغيل وأنت مسجّل دخول."),
+            ["Exclude driver updates from Windows Update"] = ("استبعاد تحديثات التعريفات", "منع ويندوز من استبدال تعريفاتك."),
+            ["Defer feature updates 365 days"] = ("تأجيل ترقيات الميزات 365 يوم", "تأخير ترقيات نسخة ويندوز لسنة."),
+            // Win 11 / UI
+            ["Classic right-click menu (Win11)"] = ("قائمة اليمين الكلاسيكية", "إرجاع قائمة ويندوز 10 الكاملة. أعد تشغيل Explorer."),
+            ["Taskbar: align to the left"] = ("محاذاة الشريط لليسار", "نقل ابدأ والأيقونات لليسار (Win11)."),
+            ["Hide taskbar Widgets button"] = ("إخفاء زر Widgets", "إزالة زر الطقس/الودجت (Win11)."),
+            ["Hide taskbar Chat/Copilot button"] = ("إخفاء زر Chat/Copilot", "إزالة زر المحادثة (Win11)."),
+            ["Hide taskbar search box"] = ("إخفاء مربع البحث", "طيّ مربع البحث في الشريط."),
+            ["Show seconds in the clock"] = ("إظهار الثواني بالساعة", "إضافة الثواني لساعة شريط المهام."),
+            // Maintenance
+            ["System File Check (SFC)"] = ("فحص ملفات النظام (SFC)", "فحص وإصلاح ملفات ويندوز التالفة. يأخذ وقت."),
+            ["Repair Windows image (DISM)"] = ("إصلاح صورة ويندوز (DISM)", "إصلاح مخزن المكوّنات. 10-20 دقيقة."),
+            ["Scan disk for errors (online)"] = ("فحص أخطاء القرص", "فحص chkdsk للقراءة فقط بدون إعادة تشغيل."),
+            ["Disk Cleanup (automatic)"] = ("تنظيف القرص", "تشغيل أداة التنظيف لتحرير مساحة في C."),
+            ["Optimize / TRIM drive C:"] = ("تحسين/TRIM للقرص C", "إلغاء تجزئة HDD أو TRIM لـ SSD."),
+            ["Clear Windows Update cache"] = ("مسح كاش التحديثات", "إيقاف الخدمات ومسح كاش التنزيل وإعادتها."),
+            ["Flush DNS + reset network stack"] = ("مسح DNS + إعادة ضبط الشبكة", "flushdns ثم Winsock reset (يحتاج إعادة تشغيل)."),
+            ["Reinstall built-in Windows apps"] = ("إعادة تثبيت برامج ويندوز", "إعادة تسجيل تطبيقات مايكروسوفت الافتراضية (تراجع عن الحذف)."),
+            // Cleanup
+            ["Clean temp files"] = ("تنظيف الملفات المؤقتة", "حذف مجلدات Temp للمستخدم وويندوز."),
+            ["Empty Recycle Bin"] = ("تفريغ سلة المحذوفات", "مسح سلة المحذوفات."),
+            ["Disable telemetry scheduled tasks"] = ("تعطيل مهام التتبّع المجدولة", "تعطيل مهام CEIP/appraiser."),
+            ["Remove OneDrive"] = ("إزالة OneDrive", "إلغاء تثبيت OneDrive (مطفأ افتراضياً)."),
+            ["Docker: prune unused data"] = ("Docker: تنظيف غير المستخدم", "إزالة الحاويات والصور والشبكات غير المستخدمة."),
+            // WSL / Startup
+            ["Optimize WSL2 memory (.wslconfig)"] = ("تحسين ذاكرة WSL2", "تحديد رام WSL/Docker بـ8GB وإرجاع المحرّر، ثم إيقاف WSL."),
+            ["Shut down WSL now"] = ("إيقاف WSL الآن", "إيقاف جهاز WSL2 لتحرير رامه فوراً (يغلق Docker)."),
+            // Install
+            ["Google Chrome"] = ("Google Chrome", "متصفّح ويب."),
+            ["7-Zip"] = ("7-Zip", "أداة ضغط."),
+            ["VLC"] = ("VLC", "مشغّل وسائط."),
+            ["Notepad++"] = ("Notepad++", "محرّر نصوص."),
+            ["Adobe Acrobat Reader"] = ("Adobe Acrobat Reader", "قارئ PDF."),
+            ["Steam"] = ("Steam", "متجر/مشغّل ألعاب."),
+            ["Discord"] = ("Discord", "صوت/دردشة."),
+            ["OBS Studio"] = ("OBS Studio", "تسجيل/بثّ."),
+            ["MSI Afterburner"] = ("MSI Afterburner", "كسر سرعة/مراقبة GPU."),
+        };
 
         // ---------------------------------------------------------- command helpers
         static string RemoveAppx(string name) =>
@@ -702,6 +881,8 @@ namespace WinForge
             {
                 Title = title,
                 Description = desc,
+                TitleEn = title,
+                DescEn = desc,
                 Commands = cmds,
                 Work = work,
                 Gaming = gaming,
@@ -926,6 +1107,8 @@ namespace WinForge
                 "net start bits", "net start wuauserv");
             Add(_maint, "Flush DNS + reset network stack", "ipconfig /flushdns then Winsock reset (reboot to finish).", false, false, false,
                 "ipconfig /flushdns", "netsh winsock reset");
+            Add(_maint, "Reinstall built-in Windows apps", "Re-registers the default Microsoft apps (undo accidental removals). Won't touch your own programs.", false, false, false,
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-AppxPackage -AllUsers | ForEach-Object { Add-AppxPackage -DisableDevelopmentMode -Register ($_.InstallLocation + '\\AppxManifest.xml') -ErrorAction SilentlyContinue }\"");
         }
 
         // Reads the actual Run-key startup programs on this machine and adds a
@@ -954,6 +1137,8 @@ namespace WinForge
                         {
                             Title = "Startup: " + name,
                             Description = "Currently launches at boot: " + target,
+                            TitleEn = "Startup: " + name,
+                            DescEn = "Currently launches at boot: " + target,
                             Commands = new[] { DisableStartup(name) },
                             Work = false, Gaming = false, Basic = false
                         };
@@ -1038,7 +1223,9 @@ namespace WinForge
                     default: it.IsSelected = false; break;
                 }
             }
-            lblStatus.Text = p == "CLEAR" ? "Cleared" : p + " preset selected";
+            lblStatus.Text = p == "CLEAR" ? L("Cleared", "تم المسح") : L(p + " preset selected", "تم اختيار نمط " + p);
+            _lastPreset = p;
+            SaveSettings();
         }
 
         void btnWork_Click(object s, RoutedEventArgs e) => ApplyPreset("WORK");
@@ -1240,7 +1427,19 @@ namespace WinForge
             "reg delete \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\" /v ExcludeWUDriversInQualityUpdate /f",
             "reg delete \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\" /v DeferFeatureUpdates /f",
             // Restore the Windows 11 context menu (remove the classic-menu override)
-            "reg delete \"HKCU\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\" /f"
+            "reg delete \"HKCU\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\" /f",
+            // Restore Win11 taskbar defaults
+            "reg add \"HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\" /v TaskbarAl /t REG_DWORD /d 1 /f",
+            "reg add \"HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\" /v TaskbarDa /t REG_DWORD /d 1 /f",
+            "reg add \"HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\" /v TaskbarMn /t REG_DWORD /d 1 /f",
+            "reg add \"HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Search\" /v SearchboxTaskbarMode /t REG_DWORD /d 1 /f",
+            "reg delete \"HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\" /v ShowSecondsInSystemClock /f",
+            // Reset DNS back to automatic (DHCP) on all adapters
+            "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-NetAdapter | ForEach-Object { Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ResetServerAddresses -ErrorAction SilentlyContinue }\"",
+            // Re-enable automatic Windows Update
+            "reg delete \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\" /v DeferFeatureUpdatesPeriodInDays /f",
+            // Restore advertising info policy
+            "reg delete \"HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AdvertisingInfo\" /v DisabledByGroupPolicy /f"
         };
     }
 }
