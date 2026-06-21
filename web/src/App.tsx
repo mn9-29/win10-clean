@@ -11,7 +11,7 @@ import { type Lang, t } from './i18n'
 import type { CatalogItem, CategoryKey, DashboardData, DeviceMode } from './types'
 import { Bar, Card, Checkbox, Chip, IconButton } from './components/ui'
 
-const VERSION = 'v2.11.1'
+const VERSION = 'v2.11.2'
 
 type TabKey = 'dashboard' | 'modes' | 'installed' | CategoryKey
 
