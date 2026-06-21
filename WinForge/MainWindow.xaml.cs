@@ -23,7 +23,7 @@ namespace WinForge
         const string Version = "2.8.0";
         // Where WinForge checks for newer releases (change if the repo is renamed).
         const string RepoOwner = "mn9-29";
-        const string RepoName = "win10-clean";
+        const string RepoName = "WinForge";
 
         string _filter = "";
         bool _dark = true;
