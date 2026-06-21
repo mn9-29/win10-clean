@@ -17,7 +17,7 @@ namespace Win10Clean
 {
     public partial class MainWindow : Window
     {
-        const string Version = "2.5.0";
+        const string Version = "2.6.0";
         string _filter = "";
         bool _dark = true;
         string _logFile;
@@ -108,24 +108,82 @@ namespace Win10Clean
         // ------------------------------------------------- select all / none (tab)
         ObservableCollection<TweakItem> ActiveCollection()
         {
+            // Index 0 is the "Device Modes" tab (no checkbox list).
             switch (tabs.SelectedIndex)
             {
-                case 0: return _apps;
-                case 1: return _privacy;
-                case 2: return _services;
-                case 3: return _gaming;
-                case 4: return _perf;
-                case 5: return _cleanup;
-                case 6: return _system;
-                case 7: return _install;
-                default: return _apps;
+                case 1: return _apps;
+                case 2: return _privacy;
+                case 3: return _services;
+                case 4: return _gaming;
+                case 5: return _perf;
+                case 6: return _cleanup;
+                case 7: return _system;
+                case 8: return _install;
+                default: return null;
             }
         }
 
         void SetVisibleSelection(bool sel)
         {
-            var view = CollectionViewSource.GetDefaultView(ActiveCollection());
+            var coll = ActiveCollection();
+            if (coll == null) return;
+            var view = CollectionViewSource.GetDefaultView(coll);
             foreach (var o in view) ((TweakItem)o).IsSelected = sel; // iterates filtered items only
+        }
+
+        // ------------------------------------------------------------ device modes
+        async void btnModeGaming_Click(object sender, RoutedEventArgs e) => await RunMode("Gaming mode", new[]
+        {
+            ("Power plan: High Performance", "powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"),
+            ("Enable Game Mode", "reg add \"HKCU\\SOFTWARE\\Microsoft\\GameBar\" /v AllowAutoGameMode /t REG_DWORD /d 1 /f & reg add \"HKCU\\SOFTWARE\\Microsoft\\GameBar\" /v AutoGameModeEnabled /t REG_DWORD /d 1 /f"),
+            ("Stop Docker Desktop", "taskkill /f /im \"Docker Desktop.exe\" /im com.docker.backend.exe /im com.docker.service 2>nul"),
+            ("Shut down WSL (frees RAM)", "wsl --shutdown"),
+            ("Close dev/comms apps", "taskkill /f /im Code.exe /im devenv.exe /im GitHubDesktop.exe 2>nul"),
+        });
+
+        async void btnModeDev_Click(object sender, RoutedEventArgs e) => await RunMode("Programming mode", new[]
+        {
+            ("Power plan: High Performance", "powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"),
+            ("Close gaming apps", "taskkill /f /im steam.exe /im Discord.exe /im EpicGamesLauncher.exe /im EADesktop.exe /im RiotClientServices.exe 2>nul"),
+            ("Start Docker Desktop (starts WSL)", "start \"\" \"%ProgramFiles%\\Docker\\Docker\\Docker Desktop.exe\""),
+        });
+
+        async void btnModeOffice_Click(object sender, RoutedEventArgs e) => await RunMode("Office mode", new[]
+        {
+            ("Power plan: Balanced", "powercfg -setactive 381b4222-f694-41f0-9685-ff5bb260df2e"),
+            ("Close gaming apps", "taskkill /f /im steam.exe /im Discord.exe /im EpicGamesLauncher.exe /im EADesktop.exe 2>nul"),
+            ("Stop Docker Desktop", "taskkill /f /im \"Docker Desktop.exe\" /im com.docker.backend.exe 2>nul"),
+            ("Shut down WSL (frees RAM)", "wsl --shutdown"),
+        });
+
+        async Task RunMode(string title, (string label, string cmd)[] actions)
+        {
+            string list = string.Join(Environment.NewLine, actions.Select(a => "  - " + a.label));
+            var confirm = MessageBox.Show(
+                "Activate " + title + "?" + Environment.NewLine + Environment.NewLine + list +
+                Environment.NewLine + Environment.NewLine +
+                "This starts/stops apps & services (nothing is deleted). Save open work first.",
+                title, MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (confirm != MessageBoxResult.Yes) return;
+
+            SetBusy(true);
+            txtLog.Clear();
+            Log("=== Activating " + title + " ===");
+            if (_logFile != null) Log("Log file: " + _logFile);
+            int total = actions.Length, done = 0;
+            await Task.Run(() =>
+            {
+                foreach (var a in actions)
+                {
+                    Log("» " + a.label);
+                    RunCmd(a.cmd);
+                    SetProgress(++done, total, title + " " + done + "/" + total);
+                }
+                Log("");
+                Log("=== " + title + " is now active. ===");
+            });
+            SetProgress(total, total, title + " active");
+            SetBusy(false);
         }
 
         void btnSelAll_Click(object sender, RoutedEventArgs e) => SetVisibleSelection(true);
@@ -581,6 +639,9 @@ namespace Win10Clean
             btnExplorer.IsEnabled = !busy;
             btnDocker.IsEnabled = !busy;
             btnSizes.IsEnabled = !busy;
+            btnModeGaming.IsEnabled = !busy;
+            btnModeDev.IsEnabled = !busy;
+            btnModeOffice.IsEnabled = !busy;
             btnWork.IsEnabled = !busy;
             btnGaming.IsEnabled = !busy;
             btnBasic.IsEnabled = !busy;

@@ -50,7 +50,7 @@
         <Grid Grid.Row="0" Margin="0,0,0,10">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                 <TextBlock Text="win10-clean" Foreground="#4EC9B0" FontSize="24" FontWeight="Bold"/>
-                <TextBlock x:Name="lblVersion" Text="v2.5.0" Foreground="{DynamicResource FgDimBrush}" FontSize="14"
+                <TextBlock x:Name="lblVersion" Text="v2.6.0" Foreground="{DynamicResource FgDimBrush}" FontSize="14"
                            VerticalAlignment="Bottom" Margin="8,0,0,4"/>
                 <TextBlock Text="  -  tick what you want, then Apply" Foreground="{DynamicResource FgDimBrush}"
                            FontSize="13" VerticalAlignment="Bottom" Margin="6,0,0,4"/>
@@ -89,6 +89,59 @@
 
         <!-- Tabs -->
         <TabControl x:Name="tabs" Grid.Row="3" Background="{DynamicResource PanelBrush}" BorderBrush="#444">
+            <TabItem Header="Device Modes">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="8">
+                        <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource FgDimBrush}" Margin="4,4,4,12"
+                                   Text="One click switches your whole device for the task at hand. Fully reversible - just activate another mode whenever you change what you're doing."/>
+
+                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="#0E7C3A" BorderThickness="2"
+                                CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                            <Grid>
+                                <StackPanel HorizontalAlignment="Left" MaxWidth="640">
+                                    <TextBlock Text="GAMING MODE" Foreground="#4EC9B0" FontSize="19" FontWeight="Bold"/>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource FgBrush}" Margin="0,6,0,0"
+                                               Text="High Performance power plan, Game Mode ON, and shuts down Docker + WSL and closes dev tools to free RAM/CPU - only gaming stuff stays."/>
+                                </StackPanel>
+                                <Button x:Name="btnModeGaming" Content="ACTIVATE" Click="btnModeGaming_Click"
+                                        Style="{StaticResource Pill}" Background="#0E7C3A" Padding="28,12" FontSize="15"
+                                        HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+
+                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="#2D6CDF" BorderThickness="2"
+                                CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                            <Grid>
+                                <StackPanel HorizontalAlignment="Left" MaxWidth="640">
+                                    <TextBlock Text="PROGRAMMING MODE" Foreground="#6CA8FF" FontSize="19" FontWeight="Bold"/>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource FgBrush}" Margin="0,6,0,0"
+                                               Text="High Performance power plan, closes gaming apps (Steam/Discord/Epic), and starts Docker Desktop + WSL ready for development."/>
+                                </StackPanel>
+                                <Button x:Name="btnModeDev" Content="ACTIVATE" Click="btnModeDev_Click"
+                                        Style="{StaticResource Pill}" Background="#2D6CDF" Padding="28,12" FontSize="15"
+                                        HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+
+                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="#B58A2E" BorderThickness="2"
+                                CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                            <Grid>
+                                <StackPanel HorizontalAlignment="Left" MaxWidth="640">
+                                    <TextBlock Text="OFFICE MODE" Foreground="#E5B84B" FontSize="19" FontWeight="Bold"/>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource FgBrush}" Margin="0,6,0,0"
+                                               Text="Balanced power plan, closes both gaming apps and Docker/WSL to keep the device light and quiet for office work."/>
+                                </StackPanel>
+                                <Button x:Name="btnModeOffice" Content="ACTIVATE" Click="btnModeOffice_Click"
+                                        Style="{StaticResource Pill}" Background="#B58A2E" Padding="28,12" FontSize="15"
+                                        HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+
+                        <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource FgDimBrush}" Margin="4,2,4,4" FontSize="11"
+                                   Text="Note: modes start/stop apps and services and set the power plan - they do NOT delete anything. Unsaved work in apps that get closed may be lost, so save first."/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
             <TabItem Header="Apps / Games">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <ItemsControl x:Name="icApps" ItemTemplate="{StaticResource TweakTemplate}"/>
