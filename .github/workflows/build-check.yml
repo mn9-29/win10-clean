@@ -1,0 +1,26 @@
+name: PR build check
+
+# Compiles the WPF GUI on every pull request so build breaks are caught
+# BEFORE merging to master (the Release workflow only runs after merge).
+on:
+  pull_request:
+    branches: [ master ]
+    paths:
+      - 'WinForge/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build GUI (.exe)
+        run: dotnet build WinForge/WinForge.csproj -c Release

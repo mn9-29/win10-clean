@@ -8,8 +8,25 @@ namespace WinForge
     /// </summary>
     public class TweakItem : INotifyPropertyChanged
     {
-        public string Title { get; set; }
-        public string Description { get; set; }
+        private string _title;
+        public string Title
+        {
+            get => _title;
+            set { if (_title == value) return; _title = value; Raise(nameof(Title)); }
+        }
+
+        private string _description;
+        public string Description
+        {
+            get => _description;
+            set { if (_description == value) return; _description = value; Raise(nameof(Description)); }
+        }
+
+        // The original English strings, kept so the UI can switch languages
+        // back and forth without losing the source text.
+        public string TitleEn { get; set; }
+        public string DescEn { get; set; }
+
         public string Category { get; set; }
         public string[] Commands { get; set; }
 
@@ -22,13 +39,10 @@ namespace WinForge
         public bool IsSelected
         {
             get => _isSelected;
-            set
-            {
-                if (_isSelected == value) return;
-                _isSelected = value;
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected)));
-            }
+            set { if (_isSelected == value) return; _isSelected = value; Raise(nameof(IsSelected)); }
         }
+
+        void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
         public event PropertyChangedEventHandler PropertyChanged;
     }
