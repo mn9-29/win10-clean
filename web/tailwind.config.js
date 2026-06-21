@@ -11,11 +11,11 @@ export default {
           to: '#2FB8A0',
         },
         ink: {
-          bg: '#16181D',
-          panel: '#1E2128',
-          border: '#2A2E37',
-          text: '#E8EAED',
-          dim: '#9AA0AA',
+          bg: 'rgb(var(--ink-bg) / <alpha-value>)',
+          panel: 'rgb(var(--ink-panel) / <alpha-value>)',
+          border: 'rgb(var(--ink-border) / <alpha-value>)',
+          text: 'rgb(var(--ink-text) / <alpha-value>)',
+          dim: 'rgb(var(--ink-dim) / <alpha-value>)',
         },
       },
       boxShadow: {
