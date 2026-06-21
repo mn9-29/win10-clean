@@ -9,3 +9,7 @@ WinForge-UI-preview.html
 
 # CI-generated embedded UI bundle
 WinForge/Assets/
+
+# local UI preview screenshots
+shot-*.png
+light2-*.png

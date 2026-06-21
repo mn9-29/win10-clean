@@ -3,8 +3,25 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  /* Dark theme tokens (RGB channels for Tailwind's <alpha-value> support). */
+  :root,
+  html.dark {
     color-scheme: dark;
+    --ink-bg: 22 24 29;        /* #16181D */
+    --ink-panel: 30 33 40;     /* #1E2128 */
+    --ink-border: 42 46 55;    /* #2A2E37 */
+    --ink-text: 232 234 237;   /* #E8EAED */
+    --ink-dim: 154 160 170;    /* #9AA0AA */
+  }
+
+  /* Light theme tokens. */
+  html:not(.dark) {
+    color-scheme: light;
+    --ink-bg: 244 246 249;     /* #F4F6F9 */
+    --ink-panel: 255 255 255;  /* #FFFFFF */
+    --ink-border: 223 227 234;  /* #DFE3EA */
+    --ink-text: 27 31 39;      /* #1B1F27 */
+    --ink-dim: 90 98 112;      /* #5A6270 */
   }
 
   html,
@@ -17,13 +34,8 @@
     margin: 0;
     font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
-    background: #16181d;
-    color: #e8eaed;
-  }
-
-  html:not(.dark) body {
-    background: #f4f6f9;
-    color: #1b1f27;
+    background: rgb(var(--ink-bg));
+    color: rgb(var(--ink-text));
   }
 }
 
