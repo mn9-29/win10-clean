@@ -1,12 +1,13 @@
 name: PR build check
 
-# Compiles the WPF GUI on every pull request so build breaks are caught
-# BEFORE merging to master (the Release workflow only runs after merge).
+# Compiles the React UI + WPF/WebView2 host on every pull request so build
+# breaks are caught BEFORE merging to master (Release only runs after merge).
 on:
   pull_request:
     branches: [ master ]
     paths:
       - 'WinForge/**'
+      - 'web/**'
       - '.github/workflows/**'
   workflow_dispatch:
 
@@ -16,6 +17,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build React UI
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Bundle UI into the app
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path WinForge/Assets | Out-Null
+          if (Test-Path WinForge/Assets/app.zip) { Remove-Item WinForge/Assets/app.zip }
+          Compress-Archive -Path web/dist/* -DestinationPath WinForge/Assets/app.zip -Force
+          Write-Host "app.zip size: $((Get-Item WinForge/Assets/app.zip).Length) bytes"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
