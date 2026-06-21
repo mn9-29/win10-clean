@@ -69,9 +69,9 @@
             </Grid.RowDefinitions>
             <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Left">
                 <TextBlock Text="WinForge" Foreground="#4EC9B0" FontSize="24" FontWeight="Bold"/>
-                <TextBlock x:Name="lblVersion" Text="v2.8.0" Foreground="{DynamicResource FgDimBrush}" FontSize="14"
+                <TextBlock x:Name="lblVersion" Text="v2.9.0" Foreground="{DynamicResource FgDimBrush}" FontSize="14"
                            VerticalAlignment="Bottom" Margin="8,0,0,4"/>
-                <TextBlock Text="  -  tick what you want, then Apply" Foreground="{DynamicResource FgDimBrush}"
+                <TextBlock x:Name="lblSubtitle" Text="  -  tick what you want, then Apply" Foreground="{DynamicResource FgDimBrush}"
                            FontSize="13" VerticalAlignment="Bottom" Margin="6,0,0,4"/>
             </StackPanel>
             <Border Grid.Row="0" HorizontalAlignment="Right" VerticalAlignment="Center"
@@ -95,7 +95,7 @@
 
         <!-- Presets row -->
         <WrapPanel Grid.Row="1" Margin="0,0,0,8">
-            <TextBlock Text="Preset:" Foreground="{DynamicResource FgBrush}" VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold"/>
+            <TextBlock x:Name="lblPreset" Text="Preset:" Foreground="{DynamicResource FgBrush}" VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold"/>
             <Button x:Name="btnWork"   Content="Office / Work" Style="{StaticResource Pill}" Click="btnWork_Click"/>
             <Button x:Name="btnGaming" Content="Gaming"        Style="{StaticResource Pill}" Click="btnGaming_Click"/>
             <Button x:Name="btnBasic"  Content="Basic / Home"  Style="{StaticResource Pill}" Click="btnBasic_Click"/>
@@ -105,11 +105,14 @@
             <Separator Width="10" Opacity="0"/>
             <CheckBox x:Name="cbRestore" Content="Create restore point first (recommended)"
                       IsChecked="True" Foreground="{DynamicResource FgBrush}" VerticalAlignment="Center" FontWeight="SemiBold"/>
+            <CheckBox x:Name="cbBackupReg" Content="Backup registry too" Margin="12,0,0,0"
+                      Foreground="{DynamicResource FgBrush}" VerticalAlignment="Center" FontWeight="SemiBold"/>
         </WrapPanel>
 
         <!-- Search / select-all / sizes / theme toolbar -->
         <DockPanel Grid.Row="2" Margin="0,0,0,8" LastChildFill="True">
             <Button x:Name="btnTheme"   DockPanel.Dock="Right" Content="Light theme" Style="{StaticResource Pill}" Click="btnTheme_Click"/>
+            <Button x:Name="btnLang"    DockPanel.Dock="Right" Content="العربية" Style="{StaticResource Pill}" Background="#3A2A50" Click="btnLang_Click"/>
             <Button x:Name="btnUpdates" DockPanel.Dock="Right" Content="Check updates" Style="{StaticResource Pill}" Background="#2A3A50" Click="btnUpdates_Click"/>
             <Button x:Name="btnSelAll"  DockPanel.Dock="Left"  Content="Select all (tab)" Style="{StaticResource Pill}" Click="btnSelAll_Click"/>
             <Button x:Name="btnSelNone" DockPanel.Dock="Left"  Content="None (tab)" Style="{StaticResource Pill}" Click="btnSelNone_Click"/>
@@ -273,6 +276,24 @@
             <TabItem Header="Win 11 / UI">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <ItemsControl x:Name="icUi" ItemTemplate="{StaticResource TweakTemplate}"/>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="Maintenance">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="#444" BorderThickness="0,0,0,1" Padding="8,8">
+                            <DockPanel LastChildFill="True">
+                                <Button x:Name="btnRestoreReg" DockPanel.Dock="Right" Content="Restore .reg" Style="{StaticResource Pill}"
+                                        Background="#5A3A1A" Click="btnRestoreReg_Click"/>
+                                <Button x:Name="btnBackupReg" DockPanel.Dock="Right" Content="Backup registry now" Style="{StaticResource Pill}"
+                                        Background="#2D4A2D" Click="btnBackupReg_Click"/>
+                                <TextBlock x:Name="lblMaint" VerticalAlignment="Center" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource FgDimBrush}" FontSize="12"
+                                           Text="Health &amp; repair tools. SFC and DISM can take 10-20 minutes - leave them running. Tick what you need, then Apply."/>
+                            </DockPanel>
+                        </Border>
+                        <ItemsControl x:Name="icMaint" ItemTemplate="{StaticResource TweakTemplate}"/>
+                    </StackPanel>
                 </ScrollViewer>
             </TabItem>
             <TabItem Header="Cleanup">

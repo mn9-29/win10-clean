@@ -20,13 +20,14 @@ namespace WinForge
 {
     public partial class MainWindow : Window
     {
-        const string Version = "2.8.0";
+        const string Version = "2.9.0";
         // Where WinForge checks for newer releases (change if the repo is renamed).
         const string RepoOwner = "mn9-29";
         const string RepoName = "WinForge";
 
         string _filter = "";
         bool _dark = true;
+        bool _arabic = false;
         string _logFile;
         string _latestUrl;
         readonly List<ICollectionView> _views = new List<ICollectionView>();
@@ -66,6 +67,7 @@ namespace WinForge
         readonly ObservableCollection<TweakItem> _network = new ObservableCollection<TweakItem>();
         readonly ObservableCollection<TweakItem> _updates = new ObservableCollection<TweakItem>();
         readonly ObservableCollection<TweakItem> _ui = new ObservableCollection<TweakItem>();
+        readonly ObservableCollection<TweakItem> _maint = new ObservableCollection<TweakItem>();
         readonly ObservableCollection<TweakItem> _cleanup = new ObservableCollection<TweakItem>();
         readonly ObservableCollection<TweakItem> _system = new ObservableCollection<TweakItem>();
         readonly ObservableCollection<TweakItem> _install = new ObservableCollection<TweakItem>();
@@ -90,6 +92,7 @@ namespace WinForge
             icNetwork.ItemsSource = _network;
             icUpdates.ItemsSource = _updates;
             icUi.ItemsSource = _ui;
+            icMaint.ItemsSource = _maint;
             icCleanup.ItemsSource = _cleanup;
             icSystem.ItemsSource = _system;
             icInstall.ItemsSource = _install;
@@ -114,7 +117,7 @@ namespace WinForge
         // ----------------------------------------------------------- search filter
         void SetupFilters()
         {
-            foreach (var c in new[] { _apps, _scan, _privacy, _services, _gaming, _perf, _network, _updates, _ui, _cleanup, _system, _install })
+            foreach (var c in new[] { _apps, _scan, _privacy, _services, _gaming, _perf, _network, _updates, _ui, _maint, _cleanup, _system, _install })
             {
                 var v = CollectionViewSource.GetDefaultView(c);
                 v.Filter = o =>
@@ -241,14 +244,14 @@ namespace WinForge
                 SetBrush("BgBrush", "#1E1E1E"); SetBrush("PanelBrush", "#252526");
                 SetBrush("FgBrush", "#EEEEEE"); SetBrush("FgDimBrush", "#999999");
                 SetBrush("SepBrush", "#33FFFFFF");
-                btnTheme.Content = "Light theme";
+                btnTheme.Content = L("Light theme", "الثيم الفاتح");
             }
             else
             {
                 SetBrush("BgBrush", "#F3F3F3"); SetBrush("PanelBrush", "#FFFFFF");
                 SetBrush("FgBrush", "#1A1A1A"); SetBrush("FgDimBrush", "#666666");
                 SetBrush("SepBrush", "#22000000");
-                btnTheme.Content = "Dark theme";
+                btnTheme.Content = L("Dark theme", "الثيم الداكن");
             }
         }
 
@@ -520,6 +523,139 @@ namespace WinForge
             try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
         }
 
+        // ========================================================= registry backup
+        // The registry branches WinForge's tweaks touch - exported so changes
+        // can be rolled back precisely by importing the .reg files.
+        static readonly string[] RegBackupBranches =
+        {
+            @"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager",
+            @"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo",
+            @"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced",
+            @"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR",
+            @"HKCU\SOFTWARE\Microsoft\GameBar",
+            @"HKCU\System\GameConfigStore",
+            @"HKCU\Control Panel\Mouse",
+            @"HKCU\SOFTWARE\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}",
+            @"HKLM\SOFTWARE\Policies\Microsoft\Windows",
+            @"HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers",
+        };
+
+        // Exports every branch above into a fresh timestamped folder; returns it.
+        string DoRegBackup()
+        {
+            string folder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "WinForge", "RegBackup_" + DateTime.Now.ToString("yyyyMMdd_HHmmss"));
+            Directory.CreateDirectory(folder);
+            int i = 0;
+            foreach (var branch in RegBackupBranches)
+            {
+                string file = Path.Combine(folder, (++i).ToString("00") + "_" +
+                    branch.Replace('\\', '-').Replace(":", "").Replace("{", "").Replace("}", "") + ".reg");
+                RunCmd("reg export \"" + branch + "\" \"" + file + "\" /y");
+            }
+            return folder;
+        }
+
+        async void btnBackupReg_Click(object sender, RoutedEventArgs e)
+        {
+            SetBusy(true);
+            txtLog.Clear();
+            Log(L("» Backing up registry branches...", "» جاري نسخ فروع الريجستري..."));
+            string folder = null;
+            await Task.Run(() => folder = DoRegBackup());
+            Log(L("=== Backup saved to: ", "=== حُفظت النسخة في: ") + folder + " ===");
+            lblStatus.Text = L("Registry backed up", "تم نسخ الريجستري");
+            SetBusy(false);
+        }
+
+        async void btnRestoreReg_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new OpenFileDialog
+            {
+                Filter = "Registry export (*.reg)|*.reg",
+                Multiselect = true,
+                Title = L("Pick the .reg backup file(s) to import", "اختر ملفات .reg للاسترجاع")
+            };
+            if (dlg.ShowDialog() != true) return;
+            var confirm = MessageBox.Show(
+                L("Import " + dlg.FileNames.Length + " .reg file(s) back into the registry?",
+                  "استرجاع " + dlg.FileNames.Length + " ملف .reg إلى الريجستري؟"),
+                "WinForge", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (confirm != MessageBoxResult.Yes) return;
+
+            SetBusy(true);
+            txtLog.Clear();
+            Log(L("=== Importing registry backup ===", "=== استرجاع نسخة الريجستري ==="));
+            var files = dlg.FileNames;
+            await Task.Run(() =>
+            {
+                foreach (var f in files) { Log("» " + f); RunCmd("reg import \"" + f + "\""); }
+                Log("");
+                Log(L("=== Restore finished. A restart is recommended. ===",
+                      "=== انتهى الاسترجاع. يُنصح بإعادة التشغيل. ==="));
+            });
+            SetBusy(false);
+        }
+
+        // ================================================================ language
+        // Tiny localizer: returns the Arabic string when Arabic mode is on.
+        string L(string en, string ar) => _arabic ? ar : en;
+
+        void btnLang_Click(object sender, RoutedEventArgs e)
+        {
+            _arabic = !_arabic;
+            ApplyLanguage();
+        }
+
+        void ApplyLanguage()
+        {
+            FlowDirection = _arabic ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
+
+            lblPreset.Text   = L("Preset:", "نمط جاهز:");
+            lblSubtitle.Text = L("  -  tick what you want, then Apply", "  -  أشّر اللي تبي ثم طبّق");
+            btnWork.Content    = L("Office / Work", "مكتب / عمل");
+            btnGaming.Content  = L("Gaming", "ألعاب");
+            btnBasic.Content   = L("Basic / Home", "أساسي / منزل");
+            btnClear.Content   = L("Clear all", "مسح الكل");
+            btnSave.Content    = L("Save profile", "حفظ ملف");
+            btnLoad.Content    = L("Load profile", "تحميل ملف");
+            cbRestore.Content  = L("Create restore point first (recommended)", "أنشئ نقطة استرجاع أولاً (موصى به)");
+            cbBackupReg.Content = L("Backup registry too", "انسخ الريجستري أيضاً");
+
+            btnSelAll.Content  = L("Select all (tab)", "تحديد الكل");
+            btnSelNone.Content = L("None (tab)", "لا شيء");
+            btnSizes.Content   = L("App sizes", "أحجام البرامج");
+            btnUpdates.Content = L("Check updates", "فحص التحديثات");
+            btnLang.Content    = _arabic ? "English" : "العربية";
+            btnTheme.Content   = _dark ? L("Light theme", "الثيم الفاتح") : L("Dark theme", "الثيم الداكن");
+            txtSearch.ToolTip  = L("Filter items by name...", "ابحث بالاسم...");
+
+            btnApply.Content    = L("APPLY SELECTED", "تطبيق المحدّد");
+            btnRevert.Content   = L("Revert settings (Undo)", "تراجع (Undo)");
+            btnExplorer.Content = L("Restart Explorer", "إعادة تشغيل Explorer");
+            btnDocker.Content   = L("Docker Prune", "تنظيف Docker");
+            btnScan.Content     = L("Scan this PC", "افحص هذا الجهاز");
+            btnBackupReg.Content  = L("Backup registry now", "انسخ الريجستري الآن");
+            btnRestoreReg.Content = L("Restore .reg", "استرجاع .reg");
+            btnDbRefresh.Content  = L("Refresh", "تحديث");
+            lblStatus.Text        = L("Ready", "جاهز");
+
+            lblScan.Text = L("Scans every removable Appx package actually installed on THIS PC (with sizes). Tick the ones you want gone, then Apply.",
+                             "يمسح كل حِزم Appx القابلة للإزالة المثبّتة فعلاً على هذا الجهاز (بالأحجام). أشّر اللي تبي تشيله ثم طبّق.");
+            lblMaint.Text = L("Health & repair tools. SFC and DISM can take 10-20 minutes - leave them running. Tick what you need, then Apply.",
+                              "أدوات صيانة وإصلاح. SFC و DISM قد تأخذ 10-20 دقيقة - اتركها تشتغل. أشّر اللي تحتاجه ثم طبّق.");
+
+            string[] en = { "Dashboard", "Device Modes", "Apps / Games", "Installed (scan)", "Privacy / Ads",
+                            "Services", "Gaming", "Performance", "Network", "Updates", "Win 11 / UI",
+                            "Maintenance", "Cleanup", "WSL / Startup", "Install (winget)" };
+            string[] ar = { "اللوحة", "أوضاع الجهاز", "البرامج/الألعاب", "مسح المثبّت", "الخصوصية/الإعلانات",
+                            "الخدمات", "الألعاب", "الأداء", "الشبكة", "التحديثات", "واجهة Win 11",
+                            "الصيانة", "التنظيف", "WSL/الإقلاع", "تثبيت (winget)" };
+            for (int i = 0; i < tabs.Items.Count && i < en.Length; i++)
+                if (tabs.Items[i] is TabItem ti) ti.Header = _arabic ? ar[i] : en[i];
+        }
+
         // ---------------------------------------------------------- command helpers
         static string RemoveAppx(string name) =>
             "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-AppxPackage -AllUsers '" + name +
@@ -772,6 +908,24 @@ namespace WinForge
                 RegDword(@"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Search", "SearchboxTaskbarMode", 0));
             Add(_ui, "Show seconds in the clock", "Adds seconds to the system tray clock.", false, false, false,
                 RegDword(@"HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "ShowSecondsInSystemClock", 1));
+
+            // ---- Maintenance (health & repair; all opt-in, can be slow) ----
+            Add(_maint, "System File Check (SFC)", "Scans and repairs corrupted Windows system files. Takes a while.", false, false, false,
+                "sfc /scannow");
+            Add(_maint, "Repair Windows image (DISM)", "Fixes the component store DISM /Online /Cleanup-Image /RestoreHealth. 10-20 min.", false, false, false,
+                "DISM /Online /Cleanup-Image /RestoreHealth");
+            Add(_maint, "Scan disk for errors (online)", "Read-only chkdsk scan of C: - no reboot needed.", false, false, false,
+                "chkdsk C: /scan");
+            Add(_maint, "Disk Cleanup (automatic)", "Runs the built-in cleanup to free space on C:.", false, false, false,
+                "cleanmgr /verylowdisk");
+            Add(_maint, "Optimize / TRIM drive C:", "Defragments HDDs or sends TRIM to SSDs.", false, false, false,
+                "defrag C: /O");
+            Add(_maint, "Clear Windows Update cache", "Stops the update services, clears the download cache, restarts them.", false, false, false,
+                "net stop wuauserv", "net stop bits",
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Remove-Item -Path ($env:windir+'\\SoftwareDistribution\\Download\\*') -Recurse -Force -ErrorAction SilentlyContinue\"",
+                "net start bits", "net start wuauserv");
+            Add(_maint, "Flush DNS + reset network stack", "ipconfig /flushdns then Winsock reset (reboot to finish).", false, false, false,
+                "ipconfig /flushdns", "netsh winsock reset");
         }
 
         // Reads the actual Run-key startup programs on this machine and adds a
@@ -960,13 +1114,17 @@ namespace WinForge
             btnGaming.IsEnabled = !busy;
             btnBasic.IsEnabled = !busy;
             btnClear.IsEnabled = !busy;
-            lblStatus.Text = busy ? "Working..." : "Ready";
+            btnScan.IsEnabled = !busy;
+            btnBackupReg.IsEnabled = !busy;
+            btnRestoreReg.IsEnabled = !busy;
+            lblStatus.Text = busy ? L("Working...", "جاري العمل...") : L("Ready", "جاهز");
         }
 
         async void btnApply_Click(object sender, RoutedEventArgs e)
         {
             var selected = _all.Where(i => i.IsSelected).ToList();
             bool restore = cbRestore.IsChecked == true;
+            bool backupReg = cbBackupReg.IsChecked == true;
             if (selected.Count == 0 && !restore)
             {
                 MessageBox.Show("Nothing selected.", "WinForge", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -998,6 +1156,12 @@ namespace WinForge
                     Log("» Creating system restore point...");
                     RunCmd(RestoreCmd);
                     SetProgress(++done, total, "Restore point done");
+                }
+                if (backupReg)
+                {
+                    Log("» Backing up registry branches...");
+                    string folder = DoRegBackup();
+                    Log("    Saved to: " + folder);
                 }
                 int idx = 0;
                 foreach (var it in selected)
