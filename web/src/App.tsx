@@ -4,16 +4,16 @@ import {
   Network, RefreshCw, AppWindow, Wrench, Trash2, TerminalSquare, Download,
   ScanLine, Sun, Moon, Languages, Info, CheckCircle2, XCircle, Cpu,
   HardDrive, MemoryStick, Clock, Monitor, Server, Play, Undo2, Container,
-  RotateCcw, X, ChevronUp, Search, Briefcase, Code2,
+  RotateCcw, X, ChevronUp, Search, Briefcase, Code2, Rocket, Activity, SlidersHorizontal,
 } from 'lucide-react'
 import { bridge, IS_REAL } from './bridge'
 import { type Lang, t } from './i18n'
-import type { CatalogItem, CategoryKey, DashboardData, DeviceMode } from './types'
-import { Bar, Card, Checkbox, Chip, IconButton } from './components/ui'
+import type { CatalogItem, CategoryKey, DashboardData, DeviceMode, StartupEntry, ResourcesDto } from './types'
+import { Bar, Card, Checkbox, Chip, IconButton, Switch } from './components/ui'
 
-const VERSION = 'v2.11.2'
+const VERSION = 'v2.12.0'
 
-type TabKey = 'dashboard' | 'modes' | 'installed' | CategoryKey
+type TabKey = 'dashboard' | 'startup' | 'resources' | 'modes' | 'tweaks' | 'maintenance' | 'install'
 
 interface TabDef {
   key: TabKey
@@ -21,9 +21,20 @@ interface TabDef {
   icon: typeof LayoutDashboard
 }
 
+// Primary navigation — simplified from the old 15-tab sidebar.
 const TABS: TabDef[] = [
   { key: 'dashboard', labelKey: 'dashboard', icon: LayoutDashboard },
+  { key: 'startup', labelKey: 'startup', icon: Rocket },
+  { key: 'resources', labelKey: 'resources', icon: Activity },
   { key: 'modes', labelKey: 'deviceModes', icon: MonitorCog },
+  { key: 'tweaks', labelKey: 'tweaks', icon: SlidersHorizontal },
+  { key: 'maintenance', labelKey: 'maintenance', icon: Wrench },
+  { key: 'install', labelKey: 'install', icon: Download },
+]
+
+// Categories consolidated behind the single "Tweaks" tab.
+interface CatDef { key: CategoryKey; labelKey: Parameters<typeof t>[1]; icon: typeof Boxes }
+const TWEAK_CATEGORIES: CatDef[] = [
   { key: 'apps', labelKey: 'apps', icon: Boxes },
   { key: 'privacy', labelKey: 'privacy', icon: ShieldOff },
   { key: 'services', labelKey: 'services', icon: Cog },
@@ -32,11 +43,8 @@ const TABS: TabDef[] = [
   { key: 'network', labelKey: 'network', icon: Network },
   { key: 'updates', labelKey: 'updates', icon: RefreshCw },
   { key: 'ui', labelKey: 'ui', icon: AppWindow },
-  { key: 'maintenance', labelKey: 'maintenance', icon: Wrench },
   { key: 'cleanup', labelKey: 'cleanup', icon: Trash2 },
   { key: 'system', labelKey: 'system', icon: TerminalSquare },
-  { key: 'install', labelKey: 'install', icon: Download },
-  { key: 'installed', labelKey: 'installed', icon: ScanLine },
 ]
 
 type Preset = 'work' | 'gaming' | 'basic' | 'clear'
@@ -68,6 +76,7 @@ export default function App() {
 
   // ---- ui state ----
   const [tab, setTab] = useState<TabKey>('dashboard')
+  const [tweakCat, setTweakCat] = useState<CategoryKey | 'all'>('all')
   const [query, setQuery] = useState('')
   const [restorePoint, setRestorePoint] = useState(true)
   const [backupReg, setBackupReg] = useState(true)
@@ -141,10 +150,22 @@ export default function App() {
   }, [logs, logOpen])
 
   // ---- derived ----
+  // Catalog-backed tabs: 'tweaks' (with inner category filter), 'maintenance', 'install'.
+  const isTweakTab = tab === 'tweaks' || tab === 'maintenance' || tab === 'install'
+
   const tabItems = useMemo(() => {
-    if (tab === 'dashboard' || tab === 'modes' || tab === 'installed') return []
-    return catalog.filter((c) => c.category === tab)
-  }, [catalog, tab])
+    if (tab === 'maintenance' || tab === 'install') {
+      return catalog.filter((c) => c.category === tab)
+    }
+    if (tab === 'tweaks') {
+      if (tweakCat === 'all') {
+        const cats = new Set<CategoryKey>(TWEAK_CATEGORIES.map((c) => c.key))
+        return catalog.filter((c) => cats.has(c.category))
+      }
+      return catalog.filter((c) => c.category === tweakCat)
+    }
+    return []
+  }, [catalog, tab, tweakCat])
 
   const visibleItems = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -217,7 +238,7 @@ export default function App() {
       setLogs((p) => [...p, { id: logIdRef.current, text: 'Explorer restarted.', level: 'ok' }])
     })
 
-  const showToolbarSelectors = !['dashboard', 'modes', 'installed'].includes(tab)
+  const showToolbarSelectors = isTweakTab
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-ink-bg text-ink-text dark:bg-ink-bg dark:text-ink-text [html:not(.dark)_&]:bg-[#f4f6f9] [html:not(.dark)_&]:text-[#1b1f27]">
@@ -247,9 +268,14 @@ export default function App() {
 
         <main className="wf-scroll min-h-0 flex-1 overflow-y-auto p-5">
           {tab === 'dashboard' && <Dashboard data={dashboard} tr={tr} />}
+          {tab === 'startup' && <StartupManager tr={tr} />}
+          {tab === 'resources' && <Resources tr={tr} />}
           {tab === 'modes' && <DeviceModes tr={tr} onMode={onMode} busy={busy} />}
-          {tab === 'installed' && <Installed tr={tr} onScan={onScan} busy={busy} logs={logs} />}
-          {showToolbarSelectors && (
+          {tab === 'tweaks' && (
+            <TweakCategoryFilter cat={tweakCat} setCat={setTweakCat} tr={tr} />
+          )}
+          {tab === 'install' && <Installed tr={tr} onScan={onScan} busy={busy} logs={logs} />}
+          {isTweakTab && (
             <TweakList items={visibleItems} selected={selected} toggle={toggle} tr={tr} />
           )}
         </main>
@@ -384,9 +410,15 @@ function Sidebar({
   selected: Set<string>
   catalog: CatalogItem[]
 }) {
+  const tweakCats = new Set<CategoryKey>(TWEAK_CATEGORIES.map((c) => c.key))
   const countFor = (key: TabKey) => {
-    if (key === 'dashboard' || key === 'modes' || key === 'installed') return 0
-    return catalog.filter((c) => c.category === key && selected.has(c.id)).length
+    if (key === 'maintenance' || key === 'install') {
+      return catalog.filter((c) => c.category === key && selected.has(c.id)).length
+    }
+    if (key === 'tweaks') {
+      return catalog.filter((c) => tweakCats.has(c.category) && selected.has(c.id)).length
+    }
+    return 0
   }
   return (
     <nav className="wf-scroll w-56 shrink-0 overflow-y-auto border-e border-ink-border bg-ink-panel/30 p-2.5">
@@ -584,6 +616,249 @@ function Installed({
         <div className="text-sm text-ink-dim">{tr('noItems')}</div>
       )}
     </div>
+  )
+}
+
+// ========================================================= TWEAK CATEGORY FILTER
+function TweakCategoryFilter({
+  cat, setCat, tr,
+}: {
+  cat: CategoryKey | 'all'
+  setCat: (c: CategoryKey | 'all') => void
+  tr: (k: Parameters<typeof t>[1]) => string
+}) {
+  const chip = (active: boolean) =>
+    `flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${
+      active
+        ? 'border-accent/60 bg-accent/10 text-accent'
+        : 'border-ink-border text-ink-dim hover:border-accent/40 hover:text-ink-text'
+    }`
+  return (
+    <div className="animate-fadeIn mb-4 flex flex-wrap items-center gap-2">
+      <button className={chip(cat === 'all')} onClick={() => setCat('all')}>
+        {tr('allCategories')}
+      </button>
+      {TWEAK_CATEGORIES.map((c) => {
+        const Icon = c.icon
+        return (
+          <button key={c.key} className={chip(cat === c.key)} onClick={() => setCat(c.key)}>
+            <Icon size={13} /> {tr(c.labelKey)}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ============================================================== STARTUP MANAGER
+function StartupManager({ tr }: { tr: (k: Parameters<typeof t>[1]) => string }) {
+  const [entries, setEntries] = useState<StartupEntry[] | null>(null)
+  const [pending, setPending] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    bridge.getStartup().then(setEntries)
+  }, [])
+
+  const onToggle = async (entry: StartupEntry) => {
+    const next = !entry.enabled
+    // optimistic update
+    setEntries((prev) => prev?.map((e) => (e.id === entry.id ? { ...e, enabled: next } : e)) ?? prev)
+    setPending((p) => new Set(p).add(entry.id))
+    try {
+      await bridge.setStartup(entry.id, next)
+    } catch {
+      // revert on failure
+      setEntries((prev) => prev?.map((e) => (e.id === entry.id ? { ...e, enabled: entry.enabled } : e)) ?? prev)
+    } finally {
+      setPending((p) => {
+        const n = new Set(p)
+        n.delete(entry.id)
+        return n
+      })
+    }
+  }
+
+  if (!entries) return <div className="animate-fadeIn text-sm text-ink-dim">{tr('loading')}</div>
+
+  const enabledCount = entries.filter((e) => e.enabled).length
+  const disabledCount = entries.length - enabledCount
+  // enabled first, then by name
+  const sorted = [...entries].sort((a, b) => {
+    if (a.enabled !== b.enabled) return a.enabled ? -1 : 1
+    return a.name.localeCompare(b.name)
+  })
+
+  return (
+    <div className="animate-fadeIn">
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+        <Rocket size={18} className="text-accent" />
+        <span className="font-semibold">{entries.length} {tr('programs')}</span>
+        <span className="text-ink-dim">·</span>
+        <span className="text-emerald-400">{enabledCount} {tr('enabled')}</span>
+        <span className="text-ink-dim">·</span>
+        <span className="text-ink-dim">{disabledCount} {tr('disabled')}</span>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {sorted.map((e) => {
+          const isPending = pending.has(e.id)
+          return (
+            <Card key={e.id} className={`flex items-center gap-3 p-3 ${e.enabled ? '' : 'opacity-80'}`}>
+              <Switch checked={e.enabled} onChange={() => onToggle(e)} disabled={isPending} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="truncate font-semibold text-ink-text">{e.name}</span>
+                  <Chip>{e.location}</Chip>
+                </div>
+                <div className="mt-0.5 truncate font-mono text-xs text-ink-dim" title={e.command}>
+                  {e.command}
+                </div>
+              </div>
+              <span
+                className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-bold tabular-nums ${
+                  e.enabled ? 'bg-emerald-500/15 text-emerald-400' : 'bg-black/30 text-ink-dim'
+                }`}
+              >
+                {e.enabled ? tr('on') : tr('off')}
+              </span>
+            </Card>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ================================================================== RESOURCES
+function Resources({ tr }: { tr: (k: Parameters<typeof t>[1]) => string }) {
+  const [res, setRes] = useState<ResourcesDto | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    const tick = () => bridge.getResources().then((r) => { if (alive) setRes(r) })
+    tick()
+    const iv = setInterval(tick, 2000)
+    return () => {
+      alive = false
+      clearInterval(iv)
+    }
+  }, [])
+
+  if (!res) return <div className="animate-fadeIn text-sm text-ink-dim">{tr('loading')}</div>
+
+  const memUsedGB = (res.memUsedMB / 1024).toFixed(1)
+  const memTotalGB = (res.memTotalMB / 1024).toFixed(0)
+  const memAvailGB = (res.memAvailMB / 1024).toFixed(1)
+
+  return (
+    <div className="animate-fadeIn flex flex-col gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {/* CPU */}
+        <Card className="p-4 lg:col-span-2">
+          <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-dim">
+            <Cpu size={14} className="text-accent" /> {tr('cpu')}
+          </div>
+          <div className="mb-3 flex items-baseline gap-2">
+            <span className="text-4xl font-bold tabular-nums">{res.cpuTotal.toFixed(0)}</span>
+            <span className="text-lg text-ink-dim">%</span>
+            <span className="ms-auto text-xs text-ink-dim">{res.cpuCores} {tr('cores')}</span>
+          </div>
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-dim">{tr('perCore')}</div>
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
+            {res.cpuPerCore.map((v, i) => (
+              <div key={i} className="flex flex-col items-center gap-1">
+                <div className="flex h-16 w-full items-end overflow-hidden rounded-md bg-black/30">
+                  <div
+                    className="w-full rounded-md wf-gradient transition-all duration-500 ease-out"
+                    style={{ height: `${Math.max(4, Math.min(100, v))}%` }}
+                  />
+                </div>
+                <span className="text-[10px] tabular-nums text-ink-dim">{v.toFixed(0)}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* Memory */}
+        <Card className="p-4">
+          <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-dim">
+            <MemoryStick size={14} className="text-accent" /> {tr('memory')}
+          </div>
+          <div className="mb-1 flex items-baseline justify-between">
+            <span className="text-2xl font-bold tabular-nums">{memUsedGB} GB</span>
+            <span className="text-sm text-ink-dim tabular-nums">/ {memTotalGB} GB</span>
+          </div>
+          <Bar value={res.memPercent} danger />
+          <div className="mt-2 flex justify-between text-xs text-ink-dim">
+            <span>{res.memPercent}% {tr('used')}</span>
+            <span className="tabular-nums">{memAvailGB} GB {tr('available')}</span>
+          </div>
+          <div className="mt-4 flex items-center gap-2 border-t border-ink-border pt-3 text-xs text-ink-dim">
+            <Clock size={13} className="text-accent" /> {tr('uptime')}: <span className="tabular-nums text-ink-text">{res.uptime}</span>
+          </div>
+        </Card>
+      </div>
+
+      {/* Disks */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {res.disks.map((d) => {
+          const pct = Math.round((d.usedGB / d.totalGB) * 100)
+          return (
+            <Card key={d.name} className="p-4">
+              <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-dim">
+                <HardDrive size={14} className="text-accent" /> {d.name}
+              </div>
+              <div className="mb-1 flex items-baseline justify-between text-sm">
+                <span className="font-semibold tabular-nums">{d.usedGB.toFixed(0)} GB</span>
+                <span className="text-ink-dim tabular-nums">/ {d.totalGB} GB</span>
+              </div>
+              <Bar value={pct} danger />
+              <div className="mt-1 text-xs text-ink-dim tabular-nums">{d.freeGB.toFixed(0)} GB {tr('free')} · {pct}% {tr('used')}</div>
+            </Card>
+          )
+        })}
+      </div>
+
+      {/* Top processes */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <ProcTable title={tr('topByRam')} rows={res.topByMem} valueLabel="MB" valueOf={(p) => p.memMB.toLocaleString()} tr={tr} />
+        <ProcTable title={tr('topByCpu')} rows={res.topByCpu} valueLabel="%" valueOf={(p) => p.cpu.toFixed(1)} tr={tr} />
+      </div>
+    </div>
+  )
+}
+
+function ProcTable({
+  title, rows, valueLabel, valueOf, tr,
+}: {
+  title: string
+  rows: { name: string; pid: number; memMB: number; cpu: number }[]
+  valueLabel: string
+  valueOf: (p: { name: string; pid: number; memMB: number; cpu: number }) => string
+  tr: (k: Parameters<typeof t>[1]) => string
+}) {
+  return (
+    <Card className="p-4">
+      <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-dim">
+        <Activity size={14} className="text-accent" /> {title}
+      </div>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-[11px] uppercase tracking-wider text-ink-dim">
+            <th className="pb-2 text-start font-semibold">{tr('process')}</th>
+            <th className="pb-2 text-end font-semibold">{valueLabel}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((p) => (
+            <tr key={p.pid} className="border-t border-ink-border/50">
+              <td className="truncate py-1.5 pe-2 font-mono text-xs">{p.name}</td>
+              <td className="py-1.5 text-end tabular-nums">{valueOf(p)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
   )
 }
 

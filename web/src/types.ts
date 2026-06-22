@@ -74,3 +74,12 @@ export interface ApplyRequest {
   restorePoint: boolean
   backupReg: boolean
 }
+
+export interface StartupEntry { id: string; name: string; command: string; location: string; scope: 'user'|'machine'; enabled: boolean }
+export interface ProcInfo { name: string; pid: number; memMB: number; cpu: number }
+export interface DiskInfo { name: string; totalGB: number; freeGB: number; usedGB: number }
+export interface ResourcesDto {
+  cpuTotal: number; cpuPerCore: number[]; cpuCores: number;
+  memTotalMB: number; memUsedMB: number; memAvailMB: number; memPercent: number;
+  uptime: string; disks: DiskInfo[]; topByMem: ProcInfo[]; topByCpu: ProcInfo[];
+}

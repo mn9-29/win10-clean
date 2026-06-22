@@ -7,6 +7,10 @@ import type {
   LogEvent,
   ProgressEvent,
   PushEvent,
+  StartupEntry,
+  ResourcesDto,
+  ProcInfo,
+  DiskInfo,
 } from './types'
 import { MOCK_CATALOG } from './catalog'
 
@@ -72,12 +76,60 @@ function makeDashboard(): DashboardData {
   }
 }
 
+// ---- Mock startup entries ----------------------------------------------
+const MOCK_STARTUP: StartupEntry[] = [
+  { id: 'su-discord', name: 'Discord', command: 'C:\\Users\\iiris\\AppData\\Local\\Discord\\Update.exe --processStart Discord.exe', location: 'HKCU Run', scope: 'user', enabled: true },
+  { id: 'su-steam', name: 'Steam', command: '"C:\\Program Files (x86)\\Steam\\steam.exe" -silent', location: 'HKCU Run', scope: 'user', enabled: true },
+  { id: 'su-spotify', name: 'Spotify', command: 'C:\\Users\\iiris\\AppData\\Roaming\\Spotify\\Spotify.exe --autostart --minimized', location: 'Startup folder', scope: 'user', enabled: false },
+  { id: 'su-nvidia', name: 'NVIDIA app', command: '"C:\\Program Files\\NVIDIA Corporation\\NVIDIA app\\CEF\\NVIDIA app.exe" --start-minimized', location: 'HKLM Run', scope: 'machine', enabled: true },
+  { id: 'su-onedrive', name: 'OneDrive', command: 'C:\\Users\\iiris\\AppData\\Local\\Microsoft\\OneDrive\\OneDrive.exe /background', location: 'HKCU Run', scope: 'user', enabled: true },
+  { id: 'su-docker', name: 'Docker Desktop', command: '"C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe" -Autostart', location: 'HKLM Run', scope: 'machine', enabled: false },
+  { id: 'su-epic', name: 'Epic Games Launcher', command: '"C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe" -silent', location: 'HKLM Run (32-bit)', scope: 'machine', enabled: false },
+  { id: 'su-razer', name: 'Razer Synapse', command: '"C:\\Program Files (x86)\\Razer\\Synapse3\\WPFUI\\Framework\\Razer Synapse 3 Host\\Razer Synapse 3.exe"', location: 'HKLM Run (32-bit)', scope: 'machine', enabled: true },
+  { id: 'su-realtek', name: 'Realtek HD Audio Manager', command: 'C:\\Program Files\\Realtek\\Audio\\HDA\\RtkNGUI64.exe -s', location: 'HKLM Run', scope: 'machine', enabled: true },
+  { id: 'su-teams', name: 'Microsoft Teams', command: '"C:\\Users\\iiris\\AppData\\Local\\Microsoft\\Teams\\current\\Teams.exe" --process-start-args "--system-initiated"', location: 'Startup folder', scope: 'user', enabled: false },
+  { id: 'su-logitech', name: 'Logitech G HUB', command: '"C:\\Program Files\\LGHUB\\lghub.exe" --background', location: 'HKCU Run', scope: 'user', enabled: true },
+  { id: 'su-epicgames', name: 'EpicGames Helper', command: '"C:\\Program Files (x86)\\Epic Games\\Launcher\\Engine\\Binaries\\Win64\\EpicWebHelper.exe"', location: 'Startup folder', scope: 'user', enabled: false },
+]
+
+// ---- Mock resources generation -----------------------------------------
+const rnd = (min: number, max: number) => +(min + Math.random() * (max - min)).toFixed(1)
+
+function makeResources(): ResourcesDto {
+  const cores = 16
+  const cpuPerCore = Array.from({ length: cores }, () => rnd(5, 60))
+  const cpuTotal = +(cpuPerCore.reduce((a, b) => a + b, 0) / cores).toFixed(1)
+  const memTotalMB = 32000
+  const memUsedMB = Math.round(20000 + Math.random() * 4000)
+  const memAvailMB = memTotalMB - memUsedMB
+  const memPercent = Math.round((memUsedMB / memTotalMB) * 100)
+  const disks: DiskInfo[] = [
+    { name: 'C:', totalGB: 931, freeGB: +(519 - Math.random() * 4).toFixed(1), usedGB: +(412 + Math.random() * 4).toFixed(1) },
+    { name: 'D:', totalGB: 1863, freeGB: +(1240 - Math.random() * 6).toFixed(1), usedGB: +(623 + Math.random() * 6).toFixed(1) },
+  ]
+  const procNames = ['chrome.exe', 'Code.exe', 'Discord.exe', 'Spotify.exe', 'Teams.exe', 'explorer.exe', 'steam.exe', 'Docker Desktop.exe', 'pwsh.exe', 'dwm.exe']
+  const topByMem: ProcInfo[] = procNames
+    .map((name, i) => ({ name, pid: 1000 + i * 137, memMB: Math.round(rnd(180, 1800)), cpu: rnd(0, 14) }))
+    .sort((a, b) => b.memMB - a.memMB)
+    .slice(0, 8)
+  const topByCpu: ProcInfo[] = procNames
+    .map((name, i) => ({ name, pid: 1000 + i * 137, memMB: Math.round(rnd(180, 1800)), cpu: rnd(0.5, 38) }))
+    .sort((a, b) => b.cpu - a.cpu)
+    .slice(0, 8)
+  return {
+    cpuTotal, cpuPerCore, cpuCores: cores,
+    memTotalMB, memUsedMB, memAvailMB, memPercent,
+    uptime: '2d 7h 41m', disks, topByMem, topByCpu,
+  }
+}
+
 class Bridge {
   private logCbs = new Set<LogCb>()
   private progressCbs = new Set<ProgressCb>()
   private dashboardCbs = new Set<DashboardCb>()
   private pending = new Map<string, (r: BridgeResponse) => void>()
   private webview = getWebView()
+  private mockStartup: StartupEntry[] = MOCK_STARTUP.map((e) => ({ ...e }))
 
   constructor() {
     if (this.webview) {
@@ -235,6 +287,26 @@ class Bridge {
     if (this.webview) return this.request('checkUpdates')
     await delay(400)
     return { current: 'v2.11.0', latest: 'v2.11.0', upToDate: true }
+  }
+
+  async getStartup(): Promise<StartupEntry[]> {
+    if (this.webview) return this.request<StartupEntry[]>('getStartup')
+    await delay(140)
+    return this.mockStartup.map((e) => ({ ...e }))
+  }
+
+  async setStartup(id: string, enabled: boolean): Promise<{ id: string; enabled: boolean }> {
+    if (this.webview) return this.request('setStartup', { id, enabled })
+    await delay(150)
+    const entry = this.mockStartup.find((e) => e.id === id)
+    if (entry) entry.enabled = enabled
+    return { id, enabled }
+  }
+
+  async getResources(): Promise<ResourcesDto> {
+    if (this.webview) return this.request<ResourcesDto>('getResources')
+    await delay(120)
+    return makeResources()
   }
 
   // ---- mock streaming helper --------------------------------------------

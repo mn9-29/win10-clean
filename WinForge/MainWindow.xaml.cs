@@ -20,7 +20,7 @@ namespace WinForge
 {
     public partial class MainWindow : Window
     {
-        const string Version = "2.11.2";
+        const string Version = "2.12.0";
         // Where WinForge checks for newer releases (change if the repo is renamed).
         const string RepoOwner = "mn9-29";
         const string RepoName = "WinForge";

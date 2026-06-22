@@ -13,6 +13,10 @@ export type DictKey =
   | 'os' | 'computer' | 'cpu' | 'memory' | 'gpu' | 'disk' | 'uptime' | 'statusCard'
   | 'gamingModeDesc' | 'programmingModeDesc' | 'officeModeDesc'
   | 'used' | 'total' | 'load' | 'aboutText' | 'noItems' | 'scan' | 'scanRunning'
+  | 'startup' | 'resources' | 'tweaks' | 'enabled' | 'disabled' | 'on' | 'off'
+  | 'startupSummary' | 'programs' | 'location' | 'allCategories' | 'category'
+  | 'perCore' | 'cores' | 'topProcesses' | 'topByRam' | 'topByCpu' | 'available'
+  | 'cpuTotal' | 'process' | 'pid' | 'free' | 'loading' | 'refresh'
 
 type Dict = Record<DictKey, string>
 
@@ -75,6 +79,30 @@ const en: Dict = {
   noItems: 'No items match your search.',
   scan: 'Scan installed apps',
   scanRunning: 'Scanning installed apps…',
+  startup: 'Startup',
+  resources: 'Resources',
+  tweaks: 'Tweaks',
+  enabled: 'enabled',
+  disabled: 'disabled',
+  on: 'ON',
+  off: 'OFF',
+  startupSummary: 'programs',
+  programs: 'programs',
+  location: 'Location',
+  allCategories: 'All',
+  category: 'Category',
+  perCore: 'Per core',
+  cores: 'cores',
+  topProcesses: 'Top processes',
+  topByRam: 'Top by RAM',
+  topByCpu: 'Top by CPU',
+  available: 'available',
+  cpuTotal: 'CPU total',
+  process: 'Process',
+  pid: 'PID',
+  free: 'free',
+  loading: 'Loading…',
+  refresh: 'Refresh',
 }
 
 const ar: Dict = {
@@ -136,6 +164,30 @@ const ar: Dict = {
   noItems: 'لا توجد عناصر مطابقة لبحثك.',
   scan: 'فحص التطبيقات المثبتة',
   scanRunning: 'جارٍ فحص التطبيقات المثبتة…',
+  startup: 'بدء التشغيل',
+  resources: 'الموارد',
+  tweaks: 'التعديلات',
+  enabled: 'مُفعّل',
+  disabled: 'مُعطّل',
+  on: 'تشغيل',
+  off: 'إيقاف',
+  startupSummary: 'برامج',
+  programs: 'برامج',
+  location: 'الموقع',
+  allCategories: 'الكل',
+  category: 'الفئة',
+  perCore: 'لكل نواة',
+  cores: 'أنوية',
+  topProcesses: 'أهم العمليات',
+  topByRam: 'الأعلى استهلاكًا للذاكرة',
+  topByCpu: 'الأعلى استهلاكًا للمعالج',
+  available: 'متاح',
+  cpuTotal: 'إجمالي المعالج',
+  process: 'العملية',
+  pid: 'المعرّف',
+  free: 'متاح',
+  loading: 'جارٍ التحميل…',
+  refresh: 'تحديث',
 }
 
 export const dictionaries: Record<Lang, Dict> = { en, ar }
