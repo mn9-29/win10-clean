@@ -11,6 +11,7 @@ import type {
   ResourcesDto,
   ProcInfo,
   DiskInfo,
+  ToggleSetting,
 } from './types'
 import { MOCK_CATALOG } from './catalog'
 
@@ -92,6 +93,40 @@ const MOCK_STARTUP: StartupEntry[] = [
   { id: 'su-epicgames', name: 'EpicGames Helper', command: '"C:\\Program Files (x86)\\Epic Games\\Launcher\\Engine\\Binaries\\Win64\\EpicWebHelper.exe"', location: 'Startup folder', scope: 'user', enabled: false },
 ]
 
+// ---- Mock stateful toggle settings -------------------------------------
+// ids / titles / categories MUST match the C# host exactly.
+const MOCK_TOGGLES: ToggleSetting[] = [
+  // privacy
+  { id: 'telemetry', title: 'Telemetry (diagnostic data)', desc: 'Send diagnostic and usage data to Microsoft.', category: 'privacy', applied: false },
+  { id: 'cortana', title: 'Cortana', desc: 'Cortana voice assistant and its background services.', category: 'privacy', applied: true },
+  { id: 'advertisingId', title: 'Advertising ID', desc: 'Per-user advertising identifier for tailored ads.', category: 'privacy', applied: false },
+  { id: 'startSuggestions', title: 'Start menu suggestions / ads', desc: 'Suggested content and promoted apps in the Start menu.', category: 'privacy', applied: true },
+  { id: 'activityHistory', title: 'Activity history / Timeline', desc: 'Collect and sync your activity history across devices.', category: 'privacy', applied: false },
+  { id: 'consumerFeatures', title: 'Suggested apps (consumer features)', desc: 'Silently install promoted third-party apps.', category: 'privacy', applied: true },
+  // performance
+  { id: 'gameDvr', title: 'Game DVR (background recording)', desc: 'Background game recording captured by Game Bar.', category: 'performance', applied: true },
+  { id: 'showFileExt', title: 'Show file extensions', desc: 'Show known file extensions in File Explorer.', category: 'performance', applied: false },
+  { id: 'mouseAccel', title: 'Mouse acceleration', desc: 'Enhance pointer precision (mouse acceleration).', category: 'performance', applied: true },
+  // ui
+  { id: 'classicMenu', title: 'Classic right-click menu (Win11)', desc: 'Restore the full classic context menu on Windows 11.', category: 'ui', applied: false },
+  { id: 'taskbarLeft', title: 'Taskbar aligned left', desc: 'Align taskbar icons to the left edge.', category: 'ui', applied: false },
+  { id: 'hideWidgets', title: 'Hide taskbar Widgets', desc: 'Remove the Widgets button from the taskbar.', category: 'ui', applied: true },
+  { id: 'hideChat', title: 'Hide taskbar Chat/Copilot', desc: 'Remove the Chat and Copilot buttons from the taskbar.', category: 'ui', applied: true },
+  { id: 'clockSeconds', title: 'Show seconds in clock', desc: 'Display seconds in the system tray clock.', category: 'ui', applied: false },
+  // gaming
+  { id: 'gameMode', title: 'Game Mode', desc: 'Prioritize system resources for the active game.', category: 'gaming', applied: true },
+  { id: 'hags', title: 'Hardware-accelerated GPU scheduling', desc: 'Let the GPU manage its own video memory scheduling.', category: 'gaming', applied: false },
+  // updates
+  { id: 'updNoRestart', title: 'No auto-restart while signed in', desc: 'Prevent Windows Update from restarting while you are signed in.', category: 'updates', applied: true },
+  { id: 'updExclDrivers', title: 'Exclude driver updates', desc: 'Stop Windows Update from delivering driver updates.', category: 'updates', applied: false },
+  // services
+  { id: 'svcDiagTrack', title: 'Connected User Experiences (DiagTrack)', desc: 'Telemetry collection service (DiagTrack).', category: 'services', applied: false },
+  { id: 'svcXbox', title: 'Xbox services', desc: 'Xbox Live and Game Bar background services.', category: 'services', applied: true },
+  { id: 'svcMaps', title: 'Downloaded Maps Manager', desc: 'Background service for offline maps.', category: 'services', applied: false },
+  { id: 'svcFax', title: 'Fax', desc: 'Legacy fax service.', category: 'services', applied: false },
+  { id: 'svcRemoteReg', title: 'Remote Registry', desc: 'Allow remote modification of the registry.', category: 'services', applied: false },
+]
+
 // ---- Mock resources generation -----------------------------------------
 const rnd = (min: number, max: number) => +(min + Math.random() * (max - min)).toFixed(1)
 
@@ -130,6 +165,7 @@ class Bridge {
   private pending = new Map<string, (r: BridgeResponse) => void>()
   private webview = getWebView()
   private mockStartup: StartupEntry[] = MOCK_STARTUP.map((e) => ({ ...e }))
+  private mockToggles: ToggleSetting[] = MOCK_TOGGLES.map((e) => ({ ...e }))
 
   constructor() {
     if (this.webview) {
@@ -301,6 +337,20 @@ class Bridge {
     const entry = this.mockStartup.find((e) => e.id === id)
     if (entry) entry.enabled = enabled
     return { id, enabled }
+  }
+
+  async getToggles(): Promise<ToggleSetting[]> {
+    if (this.webview) return this.request<ToggleSetting[]>('getToggles')
+    await delay(140)
+    return this.mockToggles.map((e) => ({ ...e }))
+  }
+
+  async setToggle(id: string, applied: boolean): Promise<{ id: string; applied: boolean }> {
+    if (this.webview) return this.request('setToggle', { id, applied })
+    await delay(150)
+    const entry = this.mockToggles.find((e) => e.id === id)
+    if (entry) entry.applied = applied
+    return { id, applied }
   }
 
   async getResources(): Promise<ResourcesDto> {

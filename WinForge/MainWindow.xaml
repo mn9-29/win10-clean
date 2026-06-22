@@ -69,7 +69,7 @@
             </Grid.RowDefinitions>
             <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Left">
                 <TextBlock Text="WinForge" Foreground="#4EC9B0" FontSize="24" FontWeight="Bold"/>
-                <TextBlock x:Name="lblVersion" Text="v2.12.0" Foreground="{DynamicResource FgDimBrush}" FontSize="14"
+                <TextBlock x:Name="lblVersion" Text="v2.13.0" Foreground="{DynamicResource FgDimBrush}" FontSize="14"
                            VerticalAlignment="Bottom" Margin="8,0,0,4"/>
                 <TextBlock x:Name="lblSubtitle" Text="  -  tick what you want, then Apply" Foreground="{DynamicResource FgDimBrush}"
                            FontSize="13" VerticalAlignment="Bottom" Margin="6,0,0,4"/>

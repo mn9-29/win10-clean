@@ -19,7 +19,7 @@ namespace WinForge
     /// </summary>
     public class Bridge
     {
-        const string Version = "2.12.0";
+        const string Version = "2.13.0";
         const string RepoOwner = "mn9-29";
         const string RepoName = "WinForge";
 

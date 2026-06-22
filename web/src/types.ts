@@ -75,6 +75,8 @@ export interface ApplyRequest {
   backupReg: boolean
 }
 
+export interface ToggleSetting { id: string; title: string; desc: string; category: string; applied: boolean }
+
 export interface StartupEntry { id: string; name: string; command: string; location: string; scope: 'user'|'machine'; enabled: boolean }
 export interface ProcInfo { name: string; pid: number; memMB: number; cpu: number }
 export interface DiskInfo { name: string; totalGB: number; freeGB: number; usedGB: number }
