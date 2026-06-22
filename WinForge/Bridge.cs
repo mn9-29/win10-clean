@@ -19,7 +19,7 @@ namespace WinForge
     /// </summary>
     public class Bridge
     {
-        const string Version = "2.11.2";
+        const string Version = "2.12.0";
         const string RepoOwner = "mn9-29";
         const string RepoName = "WinForge";
 
@@ -55,6 +55,9 @@ namespace WinForge
                 {
                     case "getCatalog": Respond(id, _items.Select(Project).ToList()); break;
                     case "getDashboard": Respond(id, SysInfo.Get()); break;
+                    case "getStartup": Respond(id, Startup.List()); break;
+                    case "setStartup": SetStartup(id, payload); break;
+                    case "getResources": Task.Run(() => { try { Respond(id, Resources.Get()); } catch (Exception ex) { RespondError(id, ex.Message); } }); break;
                     case "apply": Task.Run(() => Apply(id, payload)); break;
                     case "runMode": Task.Run(() => RunMode(id, (string)payload?["mode"])); break;
                     case "scan": Task.Run(() => Scan(id)); break;
@@ -74,6 +77,16 @@ namespace WinForge
         {
             it.Id, it.Title, it.Desc, it.Category, it.Work, it.Gaming, it.Basic
         };
+
+        // Enable/disable a startup entry (Task Manager's reversible flag).
+        void SetStartup(string reqId, JToken payload)
+        {
+            string entryId = (string)payload?["id"];
+            bool enabled = (bool?)payload?["enabled"] ?? false;
+            bool ok = !string.IsNullOrEmpty(entryId) && Startup.SetEnabled(entryId, enabled);
+            if (ok) Respond(reqId, new { id = entryId, enabled });
+            else RespondError(reqId, "Could not change the startup entry (admin rights may be required).");
+        }
 
         // ----------------------------------------------------------- senders
         void Send(object o) { try { _post(JsonConvert.SerializeObject(o, Camel)); } catch { } }
