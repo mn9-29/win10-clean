@@ -17,6 +17,7 @@ export type DictKey =
   | 'startupSummary' | 'programs' | 'location' | 'allCategories' | 'category'
   | 'perCore' | 'cores' | 'topProcesses' | 'topByRam' | 'topByCpu' | 'available'
   | 'cpuTotal' | 'process' | 'pid' | 'free' | 'loading' | 'refresh'
+  | 'settings' | 'actions' | 'liveSettings' | 'oneShotActions'
 
 type Dict = Record<DictKey, string>
 
@@ -103,6 +104,10 @@ const en: Dict = {
   free: 'free',
   loading: 'Loading…',
   refresh: 'Refresh',
+  settings: 'settings',
+  actions: 'Actions',
+  liveSettings: 'Live settings',
+  oneShotActions: 'One-shot actions can be selected and applied from the bottom bar.',
 }
 
 const ar: Dict = {
@@ -188,6 +193,10 @@ const ar: Dict = {
   free: 'متاح',
   loading: 'جارٍ التحميل…',
   refresh: 'تحديث',
+  settings: 'إعدادات',
+  actions: 'الإجراءات',
+  liveSettings: 'الإعدادات الحية',
+  oneShotActions: 'يمكن تحديد الإجراءات لمرة واحدة وتطبيقها من الشريط السفلي.',
 }
 
 export const dictionaries: Record<Lang, Dict> = { en, ar }

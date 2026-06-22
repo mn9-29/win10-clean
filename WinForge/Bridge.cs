@@ -19,7 +19,7 @@ namespace WinForge
     /// </summary>
     public class Bridge
     {
-        const string Version = "2.12.0";
+        const string Version = "2.13.0";
         const string RepoOwner = "mn9-29";
         const string RepoName = "WinForge";
 
@@ -57,6 +57,8 @@ namespace WinForge
                     case "getDashboard": Respond(id, SysInfo.Get()); break;
                     case "getStartup": Respond(id, Startup.List()); break;
                     case "setStartup": SetStartup(id, payload); break;
+                    case "getToggles": Respond(id, Toggles.List().Select(ProjectToggle).ToList()); break;
+                    case "setToggle": Task.Run(() => SetToggle(id, payload)); break;
                     case "getResources": Task.Run(() => { try { Respond(id, Resources.Get()); } catch (Exception ex) { RespondError(id, ex.Message); } }); break;
                     case "apply": Task.Run(() => Apply(id, payload)); break;
                     case "runMode": Task.Run(() => RunMode(id, (string)payload?["mode"])); break;
@@ -77,6 +79,22 @@ namespace WinForge
         {
             it.Id, it.Title, it.Desc, it.Category, it.Work, it.Gaming, it.Basic
         };
+
+        static object ProjectToggle(ToggleItem t) => new { t.Id, t.Title, t.Desc, t.Category, t.Applied };
+
+        // Apply/revert a stateful tweak, then report the freshly-read state.
+        void SetToggle(string reqId, JToken payload)
+        {
+            try
+            {
+                string tid = (string)payload?["id"];
+                bool on = (bool?)payload?["applied"] ?? false;
+                bool ok = !string.IsNullOrEmpty(tid) && Toggles.SetApplied(tid, on);
+                if (ok) Respond(reqId, new { id = tid, applied = Toggles.IsApplied(tid) });
+                else RespondError(reqId, "Could not change the setting (admin rights may be required).");
+            }
+            catch (Exception ex) { RespondError(reqId, ex.Message); }
+        }
 
         // Enable/disable a startup entry (Task Manager's reversible flag).
         void SetStartup(string reqId, JToken payload)

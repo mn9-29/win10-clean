@@ -5,13 +5,14 @@ import {
   ScanLine, Sun, Moon, Languages, Info, CheckCircle2, XCircle, Cpu,
   HardDrive, MemoryStick, Clock, Monitor, Server, Play, Undo2, Container,
   RotateCcw, X, ChevronUp, Search, Briefcase, Code2, Rocket, Activity, SlidersHorizontal,
+  ListChecks, ToggleLeft,
 } from 'lucide-react'
 import { bridge, IS_REAL } from './bridge'
 import { type Lang, t } from './i18n'
-import type { CatalogItem, CategoryKey, DashboardData, DeviceMode, StartupEntry, ResourcesDto } from './types'
+import type { CatalogItem, CategoryKey, DashboardData, DeviceMode, StartupEntry, ResourcesDto, ToggleSetting } from './types'
 import { Bar, Card, Checkbox, Chip, IconButton, Switch } from './components/ui'
 
-const VERSION = 'v2.12.0'
+const VERSION = 'v2.13.0'
 
 type TabKey = 'dashboard' | 'startup' | 'resources' | 'modes' | 'tweaks' | 'maintenance' | 'install'
 
@@ -76,6 +77,7 @@ export default function App() {
 
   // ---- ui state ----
   const [tab, setTab] = useState<TabKey>('dashboard')
+  const [tweakView, setTweakView] = useState<'settings' | 'actions'>('settings')
   const [tweakCat, setTweakCat] = useState<CategoryKey | 'all'>('all')
   const [query, setQuery] = useState('')
   const [restorePoint, setRestorePoint] = useState(true)
@@ -150,8 +152,9 @@ export default function App() {
   }, [logs, logOpen])
 
   // ---- derived ----
-  // Catalog-backed tabs: 'tweaks' (with inner category filter), 'maintenance', 'install'.
-  const isTweakTab = tab === 'tweaks' || tab === 'maintenance' || tab === 'install'
+  // The catalog checkbox list (+ select/apply flow) applies to maintenance,
+  // install, and the Tweaks tab's one-shot "Actions" sub-view.
+  const showCatalogList = tab === 'maintenance' || tab === 'install' || (tab === 'tweaks' && tweakView === 'actions')
 
   const tabItems = useMemo(() => {
     if (tab === 'maintenance' || tab === 'install') {
@@ -238,7 +241,7 @@ export default function App() {
       setLogs((p) => [...p, { id: logIdRef.current, text: 'Explorer restarted.', level: 'ok' }])
     })
 
-  const showToolbarSelectors = isTweakTab
+  const showToolbarSelectors = showCatalogList
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-ink-bg text-ink-text dark:bg-ink-bg dark:text-ink-text [html:not(.dark)_&]:bg-[#f4f6f9] [html:not(.dark)_&]:text-[#1b1f27]">
@@ -272,10 +275,19 @@ export default function App() {
           {tab === 'resources' && <Resources tr={tr} />}
           {tab === 'modes' && <DeviceModes tr={tr} onMode={onMode} busy={busy} />}
           {tab === 'tweaks' && (
-            <TweakCategoryFilter cat={tweakCat} setCat={setTweakCat} tr={tr} />
+            <>
+              <TweakViewSwitch view={tweakView} setView={setTweakView} tr={tr} />
+              {tweakView === 'settings' && <TweaksManager tr={tr} />}
+              {tweakView === 'actions' && (
+                <>
+                  <p className="animate-fadeIn mb-3 text-xs text-ink-dim">{tr('oneShotActions')}</p>
+                  <TweakCategoryFilter cat={tweakCat} setCat={setTweakCat} tr={tr} />
+                </>
+              )}
+            </>
           )}
           {tab === 'install' && <Installed tr={tr} onScan={onScan} busy={busy} logs={logs} />}
-          {isTweakTab && (
+          {showCatalogList && (
             <TweakList items={visibleItems} selected={selected} toggle={toggle} tr={tr} />
           )}
         </main>
@@ -647,6 +659,148 @@ function TweakCategoryFilter({
         )
       })}
     </div>
+  )
+}
+
+// ============================================================ TWEAK VIEW SWITCH
+function TweakViewSwitch({
+  view, setView, tr,
+}: {
+  view: 'settings' | 'actions'
+  setView: (v: 'settings' | 'actions') => void
+  tr: (k: Parameters<typeof t>[1]) => string
+}) {
+  const chip = (active: boolean) =>
+    `flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all ${
+      active
+        ? 'border-accent/60 bg-accent/10 text-accent'
+        : 'border-ink-border text-ink-dim hover:border-accent/40 hover:text-ink-text'
+    }`
+  return (
+    <div className="animate-fadeIn mb-4 flex flex-wrap items-center gap-2">
+      <button className={chip(view === 'settings')} onClick={() => setView('settings')}>
+        <ToggleLeft size={14} /> {tr('liveSettings')}
+      </button>
+      <button className={chip(view === 'actions')} onClick={() => setView('actions')}>
+        <ListChecks size={14} /> {tr('actions')}
+      </button>
+    </div>
+  )
+}
+
+// ============================================================== TWEAKS MANAGER
+// Live, stateful settings read from the machine and flipped via the host bridge.
+const TOGGLE_CATEGORY_ORDER: { key: CategoryKey; labelKey: Parameters<typeof t>[1]; icon: typeof Boxes }[] = [
+  { key: 'privacy', labelKey: 'privacy', icon: ShieldOff },
+  { key: 'performance', labelKey: 'performance', icon: Gauge },
+  { key: 'ui', labelKey: 'ui', icon: AppWindow },
+  { key: 'gaming', labelKey: 'gaming', icon: Gamepad2 },
+  { key: 'updates', labelKey: 'updates', icon: RefreshCw },
+  { key: 'services', labelKey: 'services', icon: Cog },
+]
+
+function TweaksManager({ tr }: { tr: (k: Parameters<typeof t>[1]) => string }) {
+  const [settings, setSettings] = useState<ToggleSetting[] | null>(null)
+  const [pending, setPending] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    bridge.getToggles().then(setSettings)
+  }, [])
+
+  const onToggle = async (s: ToggleSetting) => {
+    const next = !s.applied
+    // optimistic update
+    setSettings((prev) => prev?.map((e) => (e.id === s.id ? { ...e, applied: next } : e)) ?? prev)
+    setPending((p) => new Set(p).add(s.id))
+    try {
+      await bridge.setToggle(s.id, next)
+    } catch {
+      // revert on failure
+      setSettings((prev) => prev?.map((e) => (e.id === s.id ? { ...e, applied: s.applied } : e)) ?? prev)
+    } finally {
+      setPending((p) => {
+        const n = new Set(p)
+        n.delete(s.id)
+        return n
+      })
+    }
+  }
+
+  if (!settings) return <div className="animate-fadeIn text-sm text-ink-dim">{tr('loading')}</div>
+
+  const onCount = settings.filter((s) => s.applied).length
+  const offCount = settings.length - onCount
+
+  // group, in fixed category order; unknown categories appended at the end
+  const known = new Set(TOGGLE_CATEGORY_ORDER.map((c) => c.key as string))
+  const groups = TOGGLE_CATEGORY_ORDER.map((c) => ({
+    def: c,
+    items: settings.filter((s) => s.category === c.key),
+  })).filter((g) => g.items.length > 0)
+  const extra = settings.filter((s) => !known.has(s.category))
+
+  return (
+    <div className="animate-fadeIn">
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+        <SlidersHorizontal size={18} className="text-accent" />
+        <span className="font-semibold">{settings.length} {tr('settings')}</span>
+        <span className="text-ink-dim">·</span>
+        <span className="text-emerald-400">{onCount} {tr('on')}</span>
+        <span className="text-ink-dim">·</span>
+        <span className="text-ink-dim">{offCount} {tr('off')}</span>
+      </div>
+
+      <div className="flex flex-col gap-5">
+        {groups.map((g) => {
+          const Icon = g.def.icon
+          return (
+            <div key={g.def.key}>
+              <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-dim">
+                <Icon size={14} className="text-accent" /> {tr(g.def.labelKey)}
+              </div>
+              <div className="flex flex-col gap-2">
+                {g.items.map((s) => (
+                  <ToggleRow key={s.id} s={s} pending={pending.has(s.id)} onToggle={onToggle} tr={tr} />
+                ))}
+              </div>
+            </div>
+          )
+        })}
+        {extra.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {extra.map((s) => (
+              <ToggleRow key={s.id} s={s} pending={pending.has(s.id)} onToggle={onToggle} tr={tr} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ToggleRow({
+  s, pending, onToggle, tr,
+}: {
+  s: ToggleSetting
+  pending: boolean
+  onToggle: (s: ToggleSetting) => void
+  tr: (k: Parameters<typeof t>[1]) => string
+}) {
+  return (
+    <Card className={`flex items-center gap-3 p-3 ${s.applied ? '' : 'opacity-80'}`}>
+      <Switch checked={s.applied} onChange={() => onToggle(s)} disabled={pending} />
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-semibold text-ink-text">{s.title}</div>
+        <div className="mt-0.5 text-xs text-ink-dim">{s.desc}</div>
+      </div>
+      <span
+        className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-bold tabular-nums ${
+          s.applied ? 'bg-emerald-500/15 text-emerald-400' : 'bg-black/30 text-ink-dim'
+        }`}
+      >
+        {s.applied ? tr('on') : tr('off')}
+      </span>
+    </Card>
   )
 }
 
